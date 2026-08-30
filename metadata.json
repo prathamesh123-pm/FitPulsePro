@@ -1,0 +1,6 @@
+{
+  "name": "Personal Fitness Management System",
+  "description": "Complete personal fitness, workout, diet, health calculator, coach planning, and body analytics system.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

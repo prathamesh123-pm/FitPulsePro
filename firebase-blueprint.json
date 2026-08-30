@@ -1,0 +1,68 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile with personal fitness metrics and emergency contacts",
+      "type": "object",
+      "properties": {
+        "fullName": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "mobileNumber": { "type": "string" },
+        "fitnessGoal": { "type": "string" },
+        "currentWeightKg": { "type": "number" },
+        "goalWeightKg": { "type": "number" },
+        "heightCm": { "type": "number" }
+      },
+      "required": ["fullName", "email"]
+    },
+    "FitnessData": {
+      "title": "FitnessData",
+      "description": "Complete user fitness state including workouts, nutrition, checklists, attendance, and achievements",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "lastUpdated": { "type": "string" },
+        "appState": { "type": "object" }
+      },
+      "required": ["userId", "lastUpdated"]
+    },
+    "CustomFoodItem": {
+      "title": "CustomFoodItem",
+      "description": "User's personal food database entry with complete nutritional breakdown",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "mealType": { "type": "string" },
+        "quantity": { "type": "number" },
+        "unit": { "type": "string" },
+        "calories": { "type": "number" },
+        "protein": { "type": "number" },
+        "carbs": { "type": "number" },
+        "fat": { "type": "number" },
+        "fiber": { "type": "number" },
+        "sugar": { "type": "number" },
+        "notes": { "type": "string" },
+        "isFavorite": { "type": "boolean" },
+        "lastUsed": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "name", "calories", "protein", "carbs", "fat"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User document storing fitness account profile"
+    },
+    "/users/{userId}/fitnessData/{docId}": {
+      "schema": "FitnessData",
+      "description": "User fitness synchronization document storing all workouts, nutrition logs, attendance and reports"
+    },
+    "/users/{userId}/customFoods/{foodId}": {
+      "schema": "CustomFoodItem",
+      "description": "User's individual custom food library items persisted in Firestore"
+    }
+  }
+}
