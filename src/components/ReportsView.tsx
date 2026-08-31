@@ -30,7 +30,14 @@ import {
   Loader2,
   CheckCircle,
 } from "lucide-react";
-import { AppState, HealthCalculations, UserMistakeItem } from "../types";
+import {
+  AppState,
+  HealthCalculations,
+  UserMistakeItem,
+  SubmittedDailyReport,
+  SubmittedMonthlyReport,
+  DailyNutritionLog,
+} from "../types";
 import {
   generateDailyFitnessReport,
   generateWeeklyFitnessReport,
@@ -62,7 +69,8 @@ import { CustomDateRangeReportView } from "./CustomDateRangeReportView";
 import { AdvancedSummariesView } from "./AdvancedSummariesView";
 import { AdvancedAnalyticsCharts } from "./AdvancedAnalyticsCharts";
 import { ExportShareModal } from "./ExportShareModal";
-import { saveDailyReportToCloud } from "../services/firebase";
+import { DailyReportDashboard } from "./DailyReportDashboard";
+import { saveDailyReportToCloud, auth } from "../services/firebase";
 
 export type ReportSubTab =
   | "daily"
@@ -81,6 +89,13 @@ interface ReportsViewProps {
   healthMetrics: HealthCalculations;
   onUpdateActivityLogs?: (logs: any[]) => void;
   onUpdateDailyRoutine?: (date: string, routine: any) => void;
+  onSubmitDailyReport?: (date: string, submission: SubmittedDailyReport) => Promise<boolean>;
+  onUnlockDailyReport?: (date: string) => void;
+  onSubmitMonthlyReport?: (yearMonth: string, submission: SubmittedMonthlyReport) => Promise<boolean>;
+  onDeleteFoodItem?: (date: string, mealId: string, foodIndexOrId: number | string) => void;
+  onQuickAdjustDailyNutrition?: (date: string, updates: Partial<DailyNutritionLog>) => void;
+  onDeleteWorkoutHistory?: (id: string) => void;
+  onUpdateNutritionLog?: (date: string, updated: DailyNutritionLog) => void;
 }
 
 export function ReportsView({
@@ -88,6 +103,13 @@ export function ReportsView({
   healthMetrics,
   onUpdateActivityLogs,
   onUpdateDailyRoutine,
+  onSubmitDailyReport,
+  onUnlockDailyReport,
+  onSubmitMonthlyReport,
+  onDeleteFoodItem,
+  onQuickAdjustDailyNutrition,
+  onDeleteWorkoutHistory,
+  onUpdateNutritionLog,
 }: ReportsViewProps) {
   const [activeSubTab, setActiveSubTab] = useState<ReportSubTab>("daily");
   const [selectedDate, setSelectedDate] = useState<string>("2026-08-28");
@@ -135,7 +157,7 @@ export function ReportsView({
     setIsSavingToFirebase(true);
     try {
       const res = await saveDailyReportToCloud(
-        appState.cloudUser?.uid || "current-fitness-user",
+        appState.cloudUser?.uid || auth?.currentUser?.uid || "guest",
         selectedDate,
         dailyReport
       );
@@ -348,662 +370,18 @@ export function ReportsView({
       {/* SUBTAB 1: SECTION 35 - AI DAILY FITNESS REPORT */}
       {/* ========================================================================= */}
       {activeSubTab === "daily" && (
-        <div className="space-y-6">
-          {/* Top Date Selection & Data Collection Badge */}
-          <div className="rounded-3xl bg-gradient-to-r from-slate-900 via-slate-900 to-slate-800 border border-slate-800 p-6 shadow-xl space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-slate-800">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-bold">
-                    Section 35 • AI Daily Fitness Report
-                  </span>
-                  <span className="text-xs text-slate-400">Automatic End-of-Day Synthesis</span>
-                </div>
-                <h2 className="text-lg sm:text-xl font-black text-slate-100">
-                  Comprehensive Activity & Nutrition Diagnostic
-                </h2>
-                <p className="text-xs text-slate-400">
-                  Aggregated from Workout, Diet, Calories, Steps, Water, Sleep, Cardio, Body & Gym Attendance trackers.
-                </p>
-              </div>
-
-              {/* Date Selector */}
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-400 font-semibold">Report Date:</span>
-                <select
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  className="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-700 text-xs font-bold text-slate-200 focus:border-emerald-500 focus:outline-none cursor-pointer"
-                >
-                  <option value="2026-08-28">Today (Aug 28, 2026)</option>
-                  <option value="2026-08-27">Yesterday (Aug 27, 2026)</option>
-                  <option value="2026-08-26">Wednesday (Aug 26, 2026)</option>
-                  <option value="2026-08-25">Tuesday (Aug 25, 2026)</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Smart Daily Weight Loss Status & Energy Balance Card (Requirement 9) */}
-            <div className={`p-4 sm:p-5 rounded-2xl border ${
-              dailyReport.goalStatus === "Goal Supported"
-                ? "bg-emerald-950/30 border-emerald-500/40 text-emerald-100"
-                : "bg-rose-950/30 border-rose-500/40 text-rose-100"
-            } space-y-4`}>
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-                    dailyReport.goalStatus === "Goal Supported"
-                      ? "bg-emerald-500/20 text-emerald-400"
-                      : "bg-rose-500/20 text-rose-400"
-                  }`}>
-                    {dailyReport.goalStatus === "Goal Supported" ? (
-                      <CheckCircle2 className="h-6 w-6" />
-                    ) : (
-                      <AlertCircle className="h-6 w-6" />
-                    )}
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                        dailyReport.goalStatus === "Goal Supported"
-                          ? "bg-emerald-500 text-slate-950"
-                          : "bg-rose-500 text-slate-950"
-                      }`}>
-                        {dailyReport.goalStatus}
-                      </span>
-                      <span className="text-xs text-slate-300 font-bold">
-                        Deficit Maintained for Weight Loss: {dailyReport.deficitMaintained ? "YES ✔" : "NO ✘"}
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-200 mt-1">
-                      {dailyReport.deficitMaintained
-                        ? `Today's combined activities produced a net caloric deficit of ${Math.abs(dailyReport.dailyNetCalorieBalance)} kcal below maintenance expenditure.`
-                        : `Daily intake exceeded total daily energy expenditure by +${dailyReport.dailyNetCalorieBalance} kcal. Fat oxidation was not supported today.`}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Permanent Firebase Cloud Save Button */}
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    onClick={handleSaveReportToFirebase}
-                    disabled={isSavingToFirebase}
-                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer shadow-md ${
-                      firebaseSavedSuccess
-                        ? "bg-emerald-500 text-slate-950"
-                        : "bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-700 hover:border-emerald-500/50"
-                    }`}
-                    title="Save this daily fitness diagnostic permanently in Firebase Firestore"
-                  >
-                    {isSavingToFirebase ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin text-emerald-400" />
-                        <span>Saving to Cloud...</span>
-                      </>
-                    ) : firebaseSavedSuccess ? (
-                      <>
-                        <Check className="h-4 w-4" />
-                        <span>Saved to Firebase!</span>
-                      </>
-                    ) : (
-                      <>
-                        <Cloud className="h-4 w-4 text-emerald-400" />
-                        <span>Save to Cloud</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              {/* Energy Expenditure Calculation Breakdown Box */}
-              <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800/80 space-y-2 text-xs">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
-                  <span className="font-bold text-slate-300 text-[11px] uppercase tracking-wider">
-                    Mathematical Net Calorie Equation
-                  </span>
-                  <span className="font-mono text-[11px] text-emerald-400 font-semibold">
-                    Net Calories = Consumed - (Workout + Activity + BMR/TDEE)
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
-                  <div className="p-2 rounded-lg bg-slate-900 border border-slate-800">
-                    <span className="text-[10px] text-slate-400 block uppercase">Consumed</span>
-                    <span className="text-sm font-bold text-amber-400">{dailyReport.totalCaloriesConsumed || dailyReport.caloriesConsumed} kcal</span>
-                  </div>
-                  <div className="p-2 rounded-lg bg-slate-900 border border-slate-800">
-                    <span className="text-[10px] text-slate-400 block uppercase">Workout Burn</span>
-                    <span className="text-sm font-bold text-emerald-400">{dailyReport.totalWorkoutCaloriesBurned || 420} kcal</span>
-                  </div>
-                  <div className="p-2 rounded-lg bg-slate-900 border border-slate-800">
-                    <span className="text-[10px] text-slate-400 block uppercase">Activity Burn</span>
-                    <span className="text-sm font-bold text-teal-400">{dailyReport.totalActivityCaloriesBurned || 220} kcal</span>
-                  </div>
-                  <div className="p-2 rounded-lg bg-slate-900 border border-slate-800">
-                    <span className="text-[10px] text-slate-400 block uppercase">BMR / Living Base</span>
-                    <span className="text-sm font-bold text-sky-400">{dailyReport.bmrTdeeExpenditure || 2150} kcal</span>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between pt-1 border-t border-slate-800/80 text-[11px]">
-                  <span className="text-slate-400">Calculated Net Balance:</span>
-                  <span className={`font-mono font-bold ${dailyReport.deficitMaintained ? "text-emerald-400" : "text-rose-400"}`}>
-                    {dailyReport.dailyNetCalorieBalance > 0 ? `+${dailyReport.dailyNetCalorieBalance}` : dailyReport.dailyNetCalorieBalance} kcal
-                    {" "}({dailyReport.deficitMaintained ? "Caloric Deficit" : "Caloric Surplus"})
-                  </span>
-                </div>
-              </div>
-
-              {/* Required Targets Checklist (Requirement 9) */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                <div className={`p-2.5 rounded-xl border flex items-center justify-between ${
-                  dailyReport.proteinTargetMet
-                    ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-200"
-                    : "bg-slate-900 border-slate-800 text-slate-400"
-                }`}>
-                  <span className="text-[11px] font-semibold">Protein Target</span>
-                  <span className="font-bold text-[11px]">{dailyReport.proteinTargetMet ? "Met ✔" : "Shortfall ✘"}</span>
-                </div>
-
-                <div className={`p-2.5 rounded-xl border flex items-center justify-between ${
-                  dailyReport.waterTargetMet
-                    ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-200"
-                    : "bg-slate-900 border-slate-800 text-slate-400"
-                }`}>
-                  <span className="text-[11px] font-semibold">Water Target</span>
-                  <span className="font-bold text-[11px]">{dailyReport.waterTargetMet ? "Met ✔" : "Low ✘"}</span>
-                </div>
-
-                <div className={`p-2.5 rounded-xl border flex items-center justify-between ${
-                  dailyReport.sleepDurationAchieved
-                    ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-200"
-                    : "bg-slate-900 border-slate-800 text-slate-400"
-                }`}>
-                  <span className="text-[11px] font-semibold">Sleep Duration (7h+)</span>
-                  <span className="font-bold text-[11px]">{dailyReport.sleepDurationAchieved ? "Achieved ✔" : "Under 7h ✘"}</span>
-                </div>
-
-                <div className={`p-2.5 rounded-xl border flex items-center justify-between ${
-                  dailyReport.deficitMaintained
-                    ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-200"
-                    : "bg-rose-500/10 border-rose-500/30 text-rose-200"
-                }`}>
-                  <span className="text-[11px] font-semibold">Deficit Maintained</span>
-                  <span className="font-bold text-[11px]">{dailyReport.deficitMaintained ? "Yes ✔" : "No ✘"}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Section 35: Metrics Grid - Calories, Macros, Water, Steps, Times */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 text-xs">
-              <div className="p-3 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-1">
-                <span className="text-slate-400 text-[10px] uppercase font-bold block">Calories Target</span>
-                <span className="text-lg font-black text-slate-100">{dailyReport.caloriesTarget} kcal</span>
-                <span className="text-[10px] text-slate-500 block">Required for deficit</span>
-              </div>
-
-              <div className="p-3 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-1">
-                <span className="text-slate-400 text-[10px] uppercase font-bold block">Calories Consumed</span>
-                <span className="text-lg font-black text-amber-400">{dailyReport.caloriesConsumed} kcal</span>
-                <span className="text-[10px] text-slate-500 block">Total meal intake</span>
-              </div>
-
-              <div className="p-3 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-1">
-                <span className="text-slate-400 text-[10px] uppercase font-bold block">Calories Burned</span>
-                <span className="text-lg font-black text-emerald-400">{dailyReport.caloriesBurned} kcal</span>
-                <span className="text-[10px] text-slate-500 block">Active & workout burn</span>
-              </div>
-
-              <div className="p-3 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-1">
-                <span className="text-slate-400 text-[10px] uppercase font-bold block">Net Calories</span>
-                <span className="text-lg font-black text-teal-400">{dailyReport.netCalories} kcal</span>
-                <span className="text-[10px] text-emerald-400 block font-semibold">Deficit maintained</span>
-              </div>
-
-              <div className="p-3 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-1">
-                <span className="text-slate-400 text-[10px] uppercase font-bold block">Protein Consumed</span>
-                <span className="text-lg font-black text-sky-400">{dailyReport.proteinConsumed}g</span>
-                <span className="text-[10px] text-slate-500 block">Target: {dailyReport.proteinTarget}g</span>
-              </div>
-
-              <div className="p-3 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-1">
-                <span className="text-slate-400 text-[10px] uppercase font-bold block">Remaining Protein</span>
-                <span className="text-lg font-black text-rose-400">{dailyReport.remainingProtein}g</span>
-                <span className="text-[10px] text-slate-500 block">Shortfall to hit</span>
-              </div>
-            </div>
-
-            {/* Secondary Row: Carbs, Fat, Fiber, Water, Steps, Distance, Active Mins */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 text-xs">
-              <div className="p-3 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-1">
-                <span className="text-slate-400 text-[10px] uppercase font-bold block">Total Carbs</span>
-                <span className="text-base font-bold text-slate-200">{dailyReport.carbsConsumed}g</span>
-              </div>
-
-              <div className="p-3 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-1">
-                <span className="text-slate-400 text-[10px] uppercase font-bold block">Total Fat</span>
-                <span className="text-base font-bold text-slate-200">{dailyReport.fatConsumed}g</span>
-              </div>
-
-              <div className="p-3 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-1">
-                <span className="text-slate-400 text-[10px] uppercase font-bold block">Total Fiber</span>
-                <span className="text-base font-bold text-emerald-400">{dailyReport.fiberConsumed}g</span>
-              </div>
-
-              <div className="p-3 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-1">
-                <span className="text-slate-400 text-[10px] uppercase font-bold block">Water Intake</span>
-                <span className="text-base font-bold text-cyan-400">
-                  {dailyReport.waterIntakeMl} ml ({(dailyReport.waterIntakeMl / 1000).toFixed(1)}L)
-                </span>
-              </div>
-
-              <div className="p-3 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-1">
-                <span className="text-slate-400 text-[10px] uppercase font-bold block">Total Steps & Dist</span>
-                <span className="text-base font-bold text-slate-200">
-                  {dailyReport.totalSteps.toLocaleString()} ({dailyReport.walkingDistanceKm} km)
-                </span>
-              </div>
-
-              <div className="p-3 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-1">
-                <span className="text-slate-400 text-[10px] uppercase font-bold block">Active Minutes</span>
-                <span className="text-base font-bold text-emerald-400">{dailyReport.activeMinutes} mins</span>
-              </div>
-            </div>
-
-            {/* Durations Strip: Workout, Cardio, Cycling, Running, Treadmill */}
-            <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-2">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-bold text-slate-300 uppercase tracking-wider text-[10px]">
-                  Activity Durations Logged Today
-                </span>
-                <span className="text-emerald-400 font-semibold">
-                  Total Active: {dailyReport.workoutDurationMin + dailyReport.cardioDurationMin + dailyReport.cyclingDurationMin + dailyReport.runningDurationMin + dailyReport.treadmillDurationMin} mins
-                </span>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
-                <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between">
-                  <span className="text-slate-400">Workout Duration</span>
-                  <span className="font-bold text-slate-100">{dailyReport.workoutDurationMin}m</span>
-                </div>
-                <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between">
-                  <span className="text-slate-400">Cardio Duration</span>
-                  <span className="font-bold text-slate-100">{dailyReport.cardioDurationMin}m</span>
-                </div>
-                <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between">
-                  <span className="text-slate-400">Cycling Duration</span>
-                  <span className="font-bold text-slate-100">{dailyReport.cyclingDurationMin}m</span>
-                </div>
-                <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between">
-                  <span className="text-slate-400">Running Duration</span>
-                  <span className="font-bold text-slate-100">{dailyReport.runningDurationMin}m</span>
-                </div>
-                <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between">
-                  <span className="text-slate-400">Treadmill Duration</span>
-                  <span className="font-bold text-slate-100">{dailyReport.treadmillDurationMin}m</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Workout Summary Box & Diet Summary Box (2 Column Grid) */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Workout Summary Box */}
-            <div className="rounded-3xl bg-slate-900 border border-slate-800 p-6 shadow-xl space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-                <div className="flex items-center gap-2.5">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-400">
-                    <Dumbbell className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-extrabold text-slate-100">Workout Summary</h3>
-                    <p className="text-[11px] text-slate-400">{dailyReport.workoutSummary.workoutTitle}</p>
-                  </div>
-                </div>
-                <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-500/30">
-                  Completed ✔
-                </span>
-              </div>
-
-              <div className="space-y-3 text-xs">
-                <div className="p-3 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-1.5">
-                  <span className="text-[10px] text-slate-400 uppercase font-bold">Muscle Groups Trained</span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {dailyReport.workoutSummary.muscleGroups.map((mg, idx) => (
-                      <span
-                        key={idx}
-                        className="px-2 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 font-semibold text-[11px]"
-                      >
-                        {mg}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
-                  <div className="p-3 rounded-2xl bg-slate-950/60 border border-slate-800">
-                    <span className="text-[10px] text-slate-400 block uppercase">Exercises</span>
-                    <span className="text-base font-black text-slate-100">
-                      {dailyReport.workoutSummary.exercisesCompleted}
-                    </span>
-                  </div>
-                  <div className="p-3 rounded-2xl bg-slate-950/60 border border-slate-800">
-                    <span className="text-[10px] text-slate-400 block uppercase">Sets</span>
-                    <span className="text-base font-black text-slate-100">
-                      {dailyReport.workoutSummary.setsCompleted}
-                    </span>
-                  </div>
-                  <div className="p-3 rounded-2xl bg-slate-950/60 border border-slate-800">
-                    <span className="text-[10px] text-slate-400 block uppercase">Repetitions</span>
-                    <span className="text-base font-black text-slate-100">
-                      {dailyReport.workoutSummary.repsCompleted}
-                    </span>
-                  </div>
-                  <div className="p-3 rounded-2xl bg-slate-950/60 border border-slate-800">
-                    <span className="text-[10px] text-slate-400 block uppercase">Total Volume</span>
-                    <span className="text-base font-black text-emerald-400">
-                      {dailyReport.workoutSummary.workoutVolumeKg.toLocaleString()} kg
-                    </span>
-                  </div>
-                </div>
-
-                {/* Personal Records */}
-                <div className="p-3 rounded-2xl bg-gradient-to-r from-amber-950/30 to-slate-950 border border-amber-500/30 space-y-1.5">
-                  <div className="flex items-center gap-1.5 text-amber-400 text-xs font-bold">
-                    <Award className="h-4 w-4" />
-                    <span>Personal Records Hit</span>
-                  </div>
-                  <div className="space-y-1 text-[11px] text-slate-300">
-                    {dailyReport.workoutSummary.personalRecords.map((pr, idx) => (
-                      <div key={idx} className="flex items-center gap-1.5">
-                        <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
-                        <span>{pr}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Diet Summary Box */}
-            <div className="rounded-3xl bg-slate-900 border border-slate-800 p-6 shadow-xl space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-                <div className="flex items-center gap-2.5">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-500/10 text-sky-400">
-                    <FileText className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-extrabold text-slate-100">Diet Summary</h3>
-                    <p className="text-[11px] text-slate-400">9-Meal Structure Adherence</p>
-                  </div>
-                </div>
-                <span
-                  className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
-                    dailyReport.dietSummary.dietFollowed
-                      ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
-                      : "bg-rose-500/20 text-rose-300 border-rose-500/30"
-                  }`}
-                >
-                  {dailyReport.dietSummary.dietFollowed ? "Diet Followed ✔" : "Diet Broken ✘"}
-                </span>
-              </div>
-
-              <div className="space-y-3 text-xs">
-                <div className="grid grid-cols-3 gap-2 text-center">
-                  <div className="p-3 rounded-2xl bg-slate-950/60 border border-slate-800">
-                    <span className="text-[10px] text-slate-400 block uppercase">Meals Planned</span>
-                    <span className="text-base font-black text-slate-100">
-                      {dailyReport.dietSummary.mealsPlanned}
-                    </span>
-                  </div>
-                  <div className="p-3 rounded-2xl bg-slate-950/60 border border-slate-800">
-                    <span className="text-[10px] text-slate-400 block uppercase">Completed</span>
-                    <span className="text-base font-black text-emerald-400">
-                      {dailyReport.dietSummary.mealsCompleted}
-                    </span>
-                  </div>
-                  <div className="p-3 rounded-2xl bg-slate-950/60 border border-slate-800">
-                    <span className="text-[10px] text-slate-400 block uppercase">Missed Meals</span>
-                    <span className="text-base font-black text-rose-400">
-                      {dailyReport.dietSummary.mealsMissed}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-300 font-semibold">Cheat Meals Logged</span>
-                    <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 font-bold text-[10px]">
-                      {dailyReport.dietSummary.cheatMealsCount} cheat meal(s)
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between text-[11px] text-slate-400 border-t border-slate-800/60 pt-2">
-                    <span>Caloric Discipline</span>
-                    <span className="text-emerald-400 font-semibold">97% Target Adherence</span>
-                  </div>
-                  <div className="flex items-center justify-between text-[11px] text-slate-400">
-                    <span>Macro Distribution</span>
-                    <span className="text-slate-300">High Protein • Moderate Carb • Low Fat</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* AI Analysis Section & Daily Scores (0-100) */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* AI Analysis Bullets (Left 2 cols) */}
-            <div className="lg:col-span-2 rounded-3xl bg-slate-900 border border-slate-800 p-6 shadow-xl space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-                <div className="flex items-center gap-2.5">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-400">
-                    <Sparkles className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-extrabold text-slate-100">AI Daily Analysis & Action Plan</h3>
-                    <p className="text-[11px] text-slate-400">Evaluated against your Hypertrophy & Fat Loss goals</p>
-                  </div>
-                </div>
-                <span className="text-xs text-emerald-400 font-mono font-bold">FitPulse AI Core</span>
-              </div>
-
-              <div className="space-y-2.5 text-xs">
-                {dailyReport.aiAnalysis.map((bullet, idx) => (
-                  <div
-                    key={idx}
-                    className="p-3 rounded-2xl bg-slate-950/60 border border-slate-800/80 flex items-start gap-3 transition hover:border-slate-700"
-                  >
-                    <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400 mt-0.5">
-                      <Check className="h-3 w-3" />
-                    </div>
-                    <span className="text-slate-200 font-medium leading-relaxed">{bullet}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Overall Scores (0-100) (Right 1 col) */}
-            <div className="rounded-3xl bg-slate-900 border border-slate-800 p-6 shadow-xl space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-                <div className="flex items-center gap-2">
-                  <Award className="h-4 w-4 text-emerald-400" />
-                  <h3 className="text-sm font-extrabold text-slate-100">Daily Scores (0-100)</h3>
-                </div>
-                <span className="text-xs font-black text-emerald-400">
-                  {dailyReport.scores.overallHealthScore}/100
-                </span>
-              </div>
-
-              <div className="space-y-3 text-xs">
-                <div className="space-y-1">
-                  <div className="flex justify-between text-slate-300">
-                    <span>Workout Score</span>
-                    <span className="font-bold text-emerald-400">{dailyReport.scores.workoutScore}%</span>
-                  </div>
-                  <div className="h-2 w-full rounded-full bg-slate-800 overflow-hidden">
-                    <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${dailyReport.scores.workoutScore}%` }} />
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <div className="flex justify-between text-slate-300">
-                    <span>Diet Score</span>
-                    <span className="font-bold text-sky-400">{dailyReport.scores.dietScore}%</span>
-                  </div>
-                  <div className="h-2 w-full rounded-full bg-slate-800 overflow-hidden">
-                    <div className="h-full bg-sky-500 rounded-full" style={{ width: `${dailyReport.scores.dietScore}%` }} />
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <div className="flex justify-between text-slate-300">
-                    <span>Nutrition Score</span>
-                    <span className="font-bold text-amber-400">{dailyReport.scores.nutritionScore}%</span>
-                  </div>
-                  <div className="h-2 w-full rounded-full bg-slate-800 overflow-hidden">
-                    <div className="h-full bg-amber-500 rounded-full" style={{ width: `${dailyReport.scores.nutritionScore}%` }} />
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <div className="flex justify-between text-slate-300">
-                    <span>Activity Score</span>
-                    <span className="font-bold text-teal-400">{dailyReport.scores.activityScore}%</span>
-                  </div>
-                  <div className="h-2 w-full rounded-full bg-slate-800 overflow-hidden">
-                    <div className="h-full bg-teal-500 rounded-full" style={{ width: `${dailyReport.scores.activityScore}%` }} />
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <div className="flex justify-between text-slate-300">
-                    <span>Recovery Score</span>
-                    <span className="font-bold text-purple-400">{dailyReport.scores.recoveryScore}%</span>
-                  </div>
-                  <div className="h-2 w-full rounded-full bg-slate-800 overflow-hidden">
-                    <div className="h-full bg-purple-500 rounded-full" style={{ width: `${dailyReport.scores.recoveryScore}%` }} />
-                  </div>
-                </div>
-
-                <div className="pt-2 border-t border-slate-800">
-                  <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between">
-                    <span className="font-extrabold text-emerald-300 text-xs">Overall Health Composite</span>
-                    <span className="text-base font-black text-emerald-400">{dailyReport.scores.overallHealthScore}/100</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* AI Weight Loss Analysis (Requirement 10) */}
-          <div className="rounded-3xl bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 border border-slate-800 p-6 shadow-xl space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-slate-800">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                  <Sparkles className="h-5 w-5" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold">
-                      Requirement 10 • AI Intelligence
-                    </span>
-                    <span className="text-xs text-slate-400">Personalized Fat Loss & Hypertrophy Analysis</span>
-                  </div>
-                  <h3 className="text-base sm:text-lg font-black text-slate-100 mt-0.5">
-                    Daily AI Weight Loss & Body Recomposition Diagnostic
-                  </h3>
-                </div>
-              </div>
-              <span className="px-3 py-1 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 text-xs font-mono">
-                Model: Gemini Fitness Pro
-              </span>
-            </div>
-
-            {/* 7 AI Analytical Feedback Dimensions */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
-              {/* 1. Calorie Deficit Performance */}
-              <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-2 hover:border-emerald-500/30 transition">
-                <div className="flex items-center gap-2 text-emerald-400 font-bold">
-                  <Flame className="h-4 w-4" />
-                  <span className="uppercase tracking-wider text-[11px]">1. Calorie Deficit Performance</span>
-                </div>
-                <p className="text-slate-300 leading-relaxed">
-                  {dailyReport.aiWeightLossAnalysis?.calorieDeficitPerformance}
-                </p>
-              </div>
-
-              {/* 2. Workout Intensity Feedback */}
-              <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-2 hover:border-emerald-500/30 transition">
-                <div className="flex items-center gap-2 text-sky-400 font-bold">
-                  <Dumbbell className="h-4 w-4" />
-                  <span className="uppercase tracking-wider text-[11px]">2. Workout Intensity Feedback</span>
-                </div>
-                <p className="text-slate-300 leading-relaxed">
-                  {dailyReport.aiWeightLossAnalysis?.workoutIntensityFeedback}
-                </p>
-              </div>
-
-              {/* 3. Diet Consistency Review */}
-              <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-2 hover:border-emerald-500/30 transition">
-                <div className="flex items-center gap-2 text-amber-400 font-bold">
-                  <CheckCircle2 className="h-4 w-4" />
-                  <span className="uppercase tracking-wider text-[11px]">3. Diet Consistency Review</span>
-                </div>
-                <p className="text-slate-300 leading-relaxed">
-                  {dailyReport.aiWeightLossAnalysis?.dietConsistencyReview}
-                </p>
-              </div>
-
-              {/* 4. Water & Hydration Review */}
-              <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-2 hover:border-emerald-500/30 transition">
-                <div className="flex items-center gap-2 text-cyan-400 font-bold">
-                  <Droplets className="h-4 w-4" />
-                  <span className="uppercase tracking-wider text-[11px]">4. Water & Hydration Review</span>
-                </div>
-                <p className="text-slate-300 leading-relaxed">
-                  {dailyReport.aiWeightLossAnalysis?.waterHydrationReview}
-                </p>
-              </div>
-
-              {/* 5. Sleep & Recovery Review */}
-              <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-2 hover:border-emerald-500/30 transition">
-                <div className="flex items-center gap-2 text-purple-400 font-bold">
-                  <Moon className="h-4 w-4" />
-                  <span className="uppercase tracking-wider text-[11px]">5. Sleep & Recovery Review</span>
-                </div>
-                <p className="text-slate-300 leading-relaxed">
-                  {dailyReport.aiWeightLossAnalysis?.sleepRecoveryReview}
-                </p>
-              </div>
-
-              {/* 6. Weight Loss Prediction */}
-              <div className="p-4 rounded-2xl bg-gradient-to-br from-emerald-950/40 to-slate-950 border border-emerald-500/30 space-y-2">
-                <div className="flex items-center gap-2 text-emerald-400 font-bold">
-                  <TrendingDown className="h-4 w-4" />
-                  <span className="uppercase tracking-wider text-[11px]">6. Weight Loss Prediction</span>
-                </div>
-                <p className="text-emerald-100 font-medium leading-relaxed">
-                  {dailyReport.aiWeightLossAnalysis?.weightLossPrediction}
-                </p>
-              </div>
-            </div>
-
-            {/* 7. Actionable Recommendations for Tomorrow */}
-            <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-3">
-              <div className="flex items-center gap-2 text-amber-400 font-bold text-xs uppercase tracking-wider">
-                <Zap className="h-4 w-4" />
-                <span>7. Actionable AI Recommendations for Tomorrow</span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                {dailyReport.aiWeightLossAnalysis?.actionableRecommendations.map((rec: string, idx: number) => (
-                  <div key={idx} className="p-3 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 flex items-start gap-2.5">
-                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-amber-300 text-[11px] font-bold mt-0.5">
-                      {idx + 1}
-                    </span>
-                    <span className="leading-relaxed">{rec}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
+        <DailyReportDashboard
+          appState={appState}
+          dailyReport={dailyReport}
+          selectedDate={selectedDate}
+          onSelectDate={setSelectedDate}
+          onSubmitDailyReport={onSubmitDailyReport}
+          onUnlockDailyReport={onUnlockDailyReport}
+          onDeleteFoodItem={onDeleteFoodItem}
+          onQuickAdjustDailyNutrition={onQuickAdjustDailyNutrition}
+          onDeleteWorkoutHistory={onDeleteWorkoutHistory}
+          onOpenExportModal={() => setIsExportModalOpen(true)}
+        />
       )}
 
       {/* ========================================================================= */}
@@ -1724,6 +1102,7 @@ export function ReportsView({
         <MonthlyChecklistReport
           appState={appState}
           onOpenExportModal={() => setIsExportModalOpen(true)}
+          onSubmitMonthlyReport={onSubmitMonthlyReport}
         />
       )}
 

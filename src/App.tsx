@@ -16,13 +16,21 @@ import {
   CloudSyncState,
   GymAttendanceRecord,
   CustomFoodItem,
+  SubmittedDailyReport,
+  SubmittedMonthlyReport,
 } from "./types";
 import {
   loadAppState,
   saveAppState,
 } from "./services/storageService";
 import { calculateHealthMetrics } from "./utils/healthCalculators";
-import { onCloudAuthStateChanged, db } from "./services/firebase";
+import {
+  onCloudAuthStateChanged,
+  db,
+  auth,
+  saveSubmittedDailyReportToCloud,
+  saveSubmittedMonthlyReportToCloud,
+} from "./services/firebase";
 import { doc, getDocFromServer } from "firebase/firestore";
 
 import { LockScreen } from "./components/LockScreen";
@@ -42,6 +50,11 @@ import { DailyLifestyleTracker } from "./components/DailyLifestyleTracker";
 import { SecurityProfileModal } from "./components/SecurityProfileModal";
 import { CloudSyncModal } from "./components/CloudSyncModal";
 import { AchievementsModal } from "./components/AchievementsModal";
+import { PlateCalculatorModal } from "./components/PlateCalculatorModal";
+import { PersonalRecordsModal } from "./components/PersonalRecordsModal";
+import { WaterTrackerModal } from "./components/WaterTrackerModal";
+import { AudioCoachHUD } from "./components/AudioCoachHUD";
+import { Language } from "./utils/i18n";
 import { Exercise, WorkoutTemplate, ActivityLog, DailyRoutineLog } from "./types";
 
 export default function App() {
@@ -49,10 +62,36 @@ export default function App() {
   const [isLocked, setIsLocked] = useState<boolean>(() => Boolean(appState.security?.isLocked && appState.security?.pinEnabled));
   const [activeTab, setActiveTab] = useState<TabId>("dashboard");
 
+  // Language state (persisted)
+  const [lang, setLang] = useState<Language>(() => {
+    try {
+      const saved = localStorage.getItem("FITPULSE_LANG");
+      return saved === "mr" ? "mr" : "en";
+    } catch {
+      return "en";
+    }
+  });
+
+  const handleToggleLanguage = () => {
+    setLang((prev) => {
+      const next = prev === "en" ? "mr" : "en";
+      try {
+        localStorage.setItem("FITPULSE_LANG", next);
+      } catch (e) {
+        // ignore
+      }
+      return next;
+    });
+  };
+
   // Modals
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isCloudSyncModalOpen, setIsCloudSyncModalOpen] = useState(false);
   const [isAchievementsModalOpen, setIsAchievementsModalOpen] = useState(false);
+  const [isPlateCalculatorOpen, setIsPlateCalculatorOpen] = useState(false);
+  const [isPRModalOpen, setIsPRModalOpen] = useState(false);
+  const [isWaterTrackerOpen, setIsWaterTrackerOpen] = useState(false);
+  const [isAudioCoachOpen, setIsAudioCoachOpen] = useState(false);
 
   // Auto-save whenever appState updates
   useEffect(() => {
@@ -356,6 +395,95 @@ export default function App() {
     }));
   };
 
+  // Report Submission & Lock / Unlock handlers
+  const handleSubmitDailyReport = async (date: string, submission: SubmittedDailyReport): Promise<boolean> => {
+    setAppState((prev) => ({
+      ...prev,
+      submittedReports: {
+        ...(prev.submittedReports || {}),
+        [date]: submission,
+      },
+    }));
+    const userId = appState.cloudUser?.uid || auth?.currentUser?.uid || "guest";
+    await saveSubmittedDailyReportToCloud(userId, date, submission);
+    return true;
+  };
+
+  const handleUnlockDailyReport = (date: string) => {
+    setAppState((prev) => {
+      const existing = { ...(prev.submittedReports || {}) };
+      if (existing[date]) {
+        existing[date] = { ...existing[date], locked: false };
+      }
+      return {
+        ...prev,
+        submittedReports: existing,
+      };
+    });
+  };
+
+  const handleSubmitMonthlyReport = async (yearMonth: string, submission: SubmittedMonthlyReport): Promise<boolean> => {
+    setAppState((prev) => ({
+      ...prev,
+      submittedMonthlyReports: {
+        ...(prev.submittedMonthlyReports || {}),
+        [yearMonth]: submission,
+      },
+    }));
+    const userId = appState.cloudUser?.uid || auth?.currentUser?.uid || "guest";
+    await saveSubmittedMonthlyReportToCloud(userId, yearMonth, submission);
+    return true;
+  };
+
+  const handleDeleteFoodFromDailyNutrition = (date: string, mealId: string, foodIndexOrId: number | string) => {
+    setAppState((prev) => {
+      const dailyLog = prev.dailyNutrition[date];
+      if (!dailyLog) return prev;
+      const updatedMeals = dailyLog.meals.map((m) => {
+        if (m.id === mealId) {
+          return {
+            ...m,
+            foods: m.foods.filter((f, idx) => (f.id ? f.id !== foodIndexOrId : idx !== foodIndexOrId)),
+          };
+        }
+        return m;
+      });
+      return {
+        ...prev,
+        dailyNutrition: {
+          ...prev.dailyNutrition,
+          [date]: {
+            ...dailyLog,
+            meals: updatedMeals,
+          },
+        },
+      };
+    });
+  };
+
+  const handleQuickAdjustDailyNutrition = (date: string, updates: Partial<DailyNutritionLog>) => {
+    setAppState((prev) => {
+      const existing = prev.dailyNutrition[date] || {
+        date,
+        meals: [],
+        waterLoggedMl: 2850,
+        stepsCount: 8400,
+        activeCaloriesBurned: 520,
+        cheatMeals: [],
+      };
+      return {
+        ...prev,
+        dailyNutrition: {
+          ...prev.dailyNutrition,
+          [date]: {
+            ...existing,
+            ...updates,
+          },
+        },
+      };
+    });
+  };
+
   // If locked, show high-security PIN & Biometric Screen
   if (isLocked) {
     return <LockScreen security={appState.security} onUnlock={() => setIsLocked(false)} />;
@@ -375,6 +503,12 @@ export default function App() {
         onOpenAILab={() => setActiveTab("ailab")}
         onOpenAchievements={() => setIsAchievementsModalOpen(true)}
         onOpenCloudSync={() => setIsCloudSyncModalOpen(true)}
+        onOpenPlateCalculator={() => setIsPlateCalculatorOpen(true)}
+        onOpenPersonalRecords={() => setIsPRModalOpen(true)}
+        onOpenWaterTracker={() => setIsWaterTrackerOpen(true)}
+        onOpenAudioCoach={() => setIsAudioCoachOpen(true)}
+        lang={lang}
+        onToggleLanguage={handleToggleLanguage}
       />
 
       {/* Main Container */}
@@ -384,6 +518,7 @@ export default function App() {
           currentTab={activeTab}
           onSelectTab={(tab) => setActiveTab(tab)}
           activeWorkoutCount={appState.activeWorkout ? 1 : 0}
+          lang={lang}
         />
 
         {/* Tab Content Switcher */}
@@ -396,6 +531,11 @@ export default function App() {
               onQuickAddWater={handleQuickAddWater}
               onStartWorkout={handleStartWorkout}
               onOpenAchievements={() => setIsAchievementsModalOpen(true)}
+              onOpenPlateCalculator={() => setIsPlateCalculatorOpen(true)}
+              onOpenPersonalRecords={() => setIsPRModalOpen(true)}
+              onOpenWaterTracker={() => setIsWaterTrackerOpen(true)}
+              onOpenAudioCoach={() => setIsAudioCoachOpen(true)}
+              lang={lang}
             />
           )}
 
@@ -424,7 +564,7 @@ export default function App() {
               activeDietPlanId={appState.activeDietPlanId}
               onUpdateSavedDietPlans={handleUpdateSavedDietPlans}
               onSelectActiveDietPlan={handleSelectActiveDietPlan}
-              userId={appState.cloudUser?.uid || "user_local"}
+              userId={appState.cloudUser?.uid || auth?.currentUser?.uid || "guest"}
               isWorkoutCompletedToday={Boolean(appState.workoutHistory.some((w) => w.date === "2026-08-28" && w.completed))}
             />
           )}
@@ -491,6 +631,13 @@ export default function App() {
               healthMetrics={healthMetrics}
               onUpdateActivityLogs={handleUpdateActivityLogs}
               onUpdateDailyRoutine={handleUpdateDailyRoutine}
+              onSubmitDailyReport={handleSubmitDailyReport}
+              onUnlockDailyReport={handleUnlockDailyReport}
+              onSubmitMonthlyReport={handleSubmitMonthlyReport}
+              onDeleteFoodItem={handleDeleteFoodFromDailyNutrition}
+              onQuickAdjustDailyNutrition={handleQuickAdjustDailyNutrition}
+              onDeleteWorkoutHistory={handleDeleteWorkoutHistory}
+              onUpdateNutritionLog={handleUpdateDailyNutrition}
             />
           )}
 
@@ -532,6 +679,38 @@ export default function App() {
         isOpen={isAchievementsModalOpen}
         onClose={() => setIsAchievementsModalOpen(false)}
         achievements={appState.achievements || []}
+      />
+
+      {/* Barbell Plate Loader Visualizer Modal */}
+      <PlateCalculatorModal
+        isOpen={isPlateCalculatorOpen}
+        onClose={() => setIsPlateCalculatorOpen(false)}
+        lang={lang}
+      />
+
+      {/* Personal Records & Strength PRs Modal */}
+      <PersonalRecordsModal
+        isOpen={isPRModalOpen}
+        onClose={() => setIsPRModalOpen(false)}
+        userBodyweightKg={appState.profile.weightKg}
+        lang={lang}
+      />
+
+      {/* Daily Hydration Visual Water Tracker Modal */}
+      <WaterTrackerModal
+        isOpen={isWaterTrackerOpen}
+        onClose={() => setIsWaterTrackerOpen(false)}
+        currentWaterMl={appState.dailyNutrition["2026-08-28"]?.waterLoggedMl || 0}
+        targetWaterMl={healthMetrics.dailyWaterMl}
+        onAddWater={(amount) => handleQuickAddWater(amount)}
+        lang={lang}
+      />
+
+      {/* Audio Coach, Rest Timer & Tempo Metronome HUD */}
+      <AudioCoachHUD
+        isOpen={isAudioCoachOpen}
+        onClose={() => setIsAudioCoachOpen(false)}
+        lang={lang}
       />
     </div>
   );

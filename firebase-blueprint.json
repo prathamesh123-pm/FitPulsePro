@@ -49,6 +49,39 @@
         "createdAt": { "type": "string" }
       },
       "required": ["id", "name", "calories", "protein", "carbs", "fat"]
+    },
+    "SubmittedDailyReport": {
+      "title": "SubmittedDailyReport",
+      "description": "Locked daily fitness compliance submission certified by the user",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string" },
+        "submittedAt": { "type": "string" },
+        "locked": { "type": "boolean" },
+        "notes": { "type": "string" },
+        "caloriesConsumed": { "type": "number" },
+        "caloriesBurned": { "type": "number" },
+        "waterIntakeMl": { "type": "number" },
+        "totalSteps": { "type": "number" },
+        "healthScore": { "type": "number" }
+      },
+      "required": ["date", "submittedAt", "locked"]
+    },
+    "SubmittedMonthlyReport": {
+      "title": "SubmittedMonthlyReport",
+      "description": "Monthly verified 31-day fitness audit locked by the user",
+      "type": "object",
+      "properties": {
+        "yearMonth": { "type": "string" },
+        "submittedAt": { "type": "string" },
+        "locked": { "type": "boolean" },
+        "monthName": { "type": "string" },
+        "year": { "type": "number" },
+        "overallConsistencyPct": { "type": "number" },
+        "monthlyScore": { "type": "number" },
+        "notes": { "type": "string" }
+      },
+      "required": ["yearMonth", "submittedAt", "locked"]
     }
   },
   "firestore": {
@@ -63,6 +96,22 @@
     "/users/{userId}/customFoods/{foodId}": {
       "schema": "CustomFoodItem",
       "description": "User's individual custom food library items persisted in Firestore"
+    },
+    "/users/{userId}/dailyReports/{date}": {
+      "schema": "FitnessData",
+      "description": "Daily calculated fitness summary snapshot"
+    },
+    "/users/{userId}/monthlyReports/{yearMonth}": {
+      "schema": "FitnessData",
+      "description": "Monthly calculated fitness summary snapshot"
+    },
+    "/users/{userId}/submittedDailyReports/{date}": {
+      "schema": "SubmittedDailyReport",
+      "description": "Certified and locked daily submission audit"
+    },
+    "/users/{userId}/submittedMonthlyReports/{yearMonth}": {
+      "schema": "SubmittedMonthlyReport",
+      "description": "Certified and locked monthly submission audit"
     }
   }
 }

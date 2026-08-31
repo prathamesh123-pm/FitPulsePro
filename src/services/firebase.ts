@@ -40,6 +40,58 @@ try {
 
 export { app, db, auth };
 
+export enum OperationType {
+  CREATE = "create",
+  UPDATE = "update",
+  DELETE = "delete",
+  LIST = "list",
+  GET = "get",
+  WRITE = "write",
+}
+
+export interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+    tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
+  };
+}
+
+export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth?.currentUser?.uid || null,
+      email: auth?.currentUser?.email || null,
+      emailVerified: auth?.currentUser?.emailVerified || null,
+      isAnonymous: auth?.currentUser?.isAnonymous || null,
+      tenantId: auth?.currentUser?.tenantId || null,
+      providerInfo:
+        auth?.currentUser?.providerData?.map((provider: any) => ({
+          providerId: provider.providerId,
+          email: provider.email,
+        })) || [],
+    },
+    operationType,
+    path,
+  };
+  console.error("Firestore Error: ", JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
+
+function resolveUserId(userId?: string): string {
+  return auth?.currentUser?.uid || (userId && userId !== "undefined" && userId !== "null" ? userId : "guest");
+}
+
 /**
  * Save / Backup user AppState to Firebase Cloud Firestore
  */
@@ -51,14 +103,16 @@ export async function syncAppStateToCloud(
     return { success: false, error: "Cloud database not initialized" };
   }
 
+  const effectiveUserId = resolveUserId(userId);
+  const path = `users/${effectiveUserId}/fitnessData/currentState`;
   try {
-    const userDocRef = doc(db, "users", userId, "fitnessData", "currentState");
+    const userDocRef = doc(db, "users", effectiveUserId, "fitnessData", "currentState");
     // Strip functions or invalid values before writing
     const cleanState = JSON.parse(JSON.stringify(state));
     await setDoc(
       userDocRef,
       {
-        userId,
+        userId: effectiveUserId,
         lastUpdated: new Date().toISOString(),
         timestamp: serverTimestamp(),
         appState: cleanState,
@@ -67,6 +121,9 @@ export async function syncAppStateToCloud(
     );
     return { success: true };
   } catch (err: any) {
+    if (err?.code === "permission-denied" || err?.message?.includes("Missing or insufficient permissions")) {
+      handleFirestoreError(err, OperationType.WRITE, path);
+    }
     console.error("Firestore sync error:", err);
     return { success: false, error: err?.message || "Failed to sync to cloud" };
   }
@@ -83,12 +140,14 @@ export async function saveDailyReportToCloud(
   if (!db) {
     return { success: true };
   }
+  const effectiveUserId = resolveUserId(userId);
+  const path = `users/${effectiveUserId}/dailyReports/${date}`;
   try {
-    const reportDocRef = doc(db, "users", userId, "dailyReports", date);
+    const reportDocRef = doc(db, "users", effectiveUserId, "dailyReports", date);
     await setDoc(
       reportDocRef,
       {
-        userId,
+        userId: effectiveUserId,
         date,
         report: JSON.parse(JSON.stringify(report)),
         savedAt: new Date().toISOString(),
@@ -98,8 +157,119 @@ export async function saveDailyReportToCloud(
     );
     return { success: true };
   } catch (err: any) {
+    if (err?.code === "permission-denied" || err?.message?.includes("Missing or insufficient permissions")) {
+      handleFirestoreError(err, OperationType.WRITE, path);
+    }
     console.error("Firestore report save error:", err);
     return { success: false, error: err?.message || "Failed to save report to cloud" };
+  }
+}
+
+/**
+ * Save Monthly Fitness Report permanently to Firebase Cloud Firestore
+ */
+export async function saveMonthlyReportToCloud(
+  userId: string,
+  yearMonth: string,
+  report: any
+): Promise<{ success: boolean; error?: string }> {
+  if (!db) {
+    return { success: true };
+  }
+  const effectiveUserId = resolveUserId(userId);
+  const path = `users/${effectiveUserId}/monthlyReports/${yearMonth}`;
+  try {
+    const reportDocRef = doc(db, "users", effectiveUserId, "monthlyReports", yearMonth);
+    await setDoc(
+      reportDocRef,
+      {
+        userId: effectiveUserId,
+        yearMonth,
+        report: JSON.parse(JSON.stringify(report)),
+        savedAt: new Date().toISOString(),
+        timestamp: serverTimestamp(),
+      },
+      { merge: true }
+    );
+    return { success: true };
+  } catch (err: any) {
+    if (err?.code === "permission-denied" || err?.message?.includes("Missing or insufficient permissions")) {
+      handleFirestoreError(err, OperationType.WRITE, path);
+    }
+    console.error("Firestore monthly report save error:", err);
+    return { success: false, error: err?.message || "Failed to save monthly report to cloud" };
+  }
+}
+
+/**
+ * Save and lock a Submitted Daily Report to Firestore
+ */
+export async function saveSubmittedDailyReportToCloud(
+  userId: string,
+  date: string,
+  submission: any
+): Promise<{ success: boolean; error?: string }> {
+  if (!db) {
+    return { success: true };
+  }
+  const effectiveUserId = resolveUserId(userId);
+  const path = `users/${effectiveUserId}/submittedDailyReports/${date}`;
+  try {
+    const subDocRef = doc(db, "users", effectiveUserId, "submittedDailyReports", date);
+    await setDoc(
+      subDocRef,
+      {
+        userId: effectiveUserId,
+        date,
+        submission: JSON.parse(JSON.stringify(submission)),
+        submittedAt: new Date().toISOString(),
+        timestamp: serverTimestamp(),
+      },
+      { merge: true }
+    );
+    return { success: true };
+  } catch (err: any) {
+    if (err?.code === "permission-denied" || err?.message?.includes("Missing or insufficient permissions")) {
+      handleFirestoreError(err, OperationType.WRITE, path);
+    }
+    console.error("Firestore daily submission save error:", err);
+    return { success: false, error: err?.message || "Failed to submit daily report to cloud" };
+  }
+}
+
+/**
+ * Save and lock a Submitted Monthly Report to Firestore
+ */
+export async function saveSubmittedMonthlyReportToCloud(
+  userId: string,
+  yearMonth: string,
+  submission: any
+): Promise<{ success: boolean; error?: string }> {
+  if (!db) {
+    return { success: true };
+  }
+  const effectiveUserId = resolveUserId(userId);
+  const path = `users/${effectiveUserId}/submittedMonthlyReports/${yearMonth}`;
+  try {
+    const subDocRef = doc(db, "users", effectiveUserId, "submittedMonthlyReports", yearMonth);
+    await setDoc(
+      subDocRef,
+      {
+        userId: effectiveUserId,
+        yearMonth,
+        submission: JSON.parse(JSON.stringify(submission)),
+        submittedAt: new Date().toISOString(),
+        timestamp: serverTimestamp(),
+      },
+      { merge: true }
+    );
+    return { success: true };
+  } catch (err: any) {
+    if (err?.code === "permission-denied" || err?.message?.includes("Missing or insufficient permissions")) {
+      handleFirestoreError(err, OperationType.WRITE, path);
+    }
+    console.error("Firestore monthly submission save error:", err);
+    return { success: false, error: err?.message || "Failed to submit monthly report to cloud" };
   }
 }
 
@@ -113,13 +283,15 @@ export async function saveCustomFoodToCloud(
   if (!db) {
     return { success: true };
   }
+  const effectiveUserId = resolveUserId(userId);
+  const path = `users/${effectiveUserId}/customFoods/${food.id}`;
   try {
-    const foodDocRef = doc(db, "users", userId, "customFoods", food.id);
+    const foodDocRef = doc(db, "users", effectiveUserId, "customFoods", food.id);
     await setDoc(
       foodDocRef,
       {
         ...food,
-        userId,
+        userId: effectiveUserId,
         updatedAt: new Date().toISOString(),
         timestamp: serverTimestamp(),
       },
@@ -127,6 +299,9 @@ export async function saveCustomFoodToCloud(
     );
     return { success: true };
   } catch (err: any) {
+    if (err?.code === "permission-denied" || err?.message?.includes("Missing or insufficient permissions")) {
+      handleFirestoreError(err, OperationType.WRITE, path);
+    }
     console.error("Firestore custom food save error:", err);
     return { success: false, error: err?.message || "Failed to save custom food to cloud" };
   }
@@ -142,11 +317,16 @@ export async function deleteCustomFoodFromCloud(
   if (!db) {
     return { success: true };
   }
+  const effectiveUserId = resolveUserId(userId);
+  const path = `users/${effectiveUserId}/customFoods/${foodId}`;
   try {
-    const foodDocRef = doc(db, "users", userId, "customFoods", foodId);
+    const foodDocRef = doc(db, "users", effectiveUserId, "customFoods", foodId);
     await deleteDoc(foodDocRef);
     return { success: true };
   } catch (err: any) {
+    if (err?.code === "permission-denied" || err?.message?.includes("Missing or insufficient permissions")) {
+      handleFirestoreError(err, OperationType.DELETE, path);
+    }
     console.error("Firestore custom food delete error:", err);
     return { success: false, error: err?.message || "Failed to delete custom food from cloud" };
   }
@@ -161,8 +341,10 @@ export async function fetchCustomFoodsFromCloud(
   if (!db) {
     return { success: false, error: "Cloud database not initialized" };
   }
+  const effectiveUserId = resolveUserId(userId);
+  const path = `users/${effectiveUserId}/customFoods`;
   try {
-    const foodsColRef = collection(db, "users", userId, "customFoods");
+    const foodsColRef = collection(db, "users", effectiveUserId, "customFoods");
     const snapshot = await getDocs(foodsColRef);
     const items: CustomFoodItem[] = [];
     snapshot.forEach((d) => {
@@ -170,6 +352,9 @@ export async function fetchCustomFoodsFromCloud(
     });
     return { success: true, data: items };
   } catch (err: any) {
+    if (err?.code === "permission-denied" || err?.message?.includes("Missing or insufficient permissions")) {
+      handleFirestoreError(err, OperationType.GET, path);
+    }
     console.error("Firestore custom foods fetch error:", err);
     return { success: false, error: err?.message || "Failed to fetch custom foods from cloud" };
   }
@@ -185,8 +370,10 @@ export async function fetchAppStateFromCloud(
     return { success: false, error: "Cloud database not initialized" };
   }
 
+  const effectiveUserId = resolveUserId(userId);
+  const path = `users/${effectiveUserId}/fitnessData/currentState`;
   try {
-    const userDocRef = doc(db, "users", userId, "fitnessData", "currentState");
+    const userDocRef = doc(db, "users", effectiveUserId, "fitnessData", "currentState");
     const docSnap = await getDoc(userDocRef);
     if (docSnap.exists()) {
       const data = docSnap.data();
@@ -196,6 +383,9 @@ export async function fetchAppStateFromCloud(
     }
     return { success: false, error: "No cloud backup found for this account" };
   } catch (err: any) {
+    if (err?.code === "permission-denied" || err?.message?.includes("Missing or insufficient permissions")) {
+      handleFirestoreError(err, OperationType.GET, path);
+    }
     console.error("Firestore fetch error:", err);
     return { success: false, error: err?.message || "Failed to fetch cloud backup" };
   }
@@ -210,8 +400,10 @@ export function subscribeToCloudChanges(
 ): () => void {
   if (!db) return () => {};
 
+  const effectiveUserId = resolveUserId(userId);
+  const path = `users/${effectiveUserId}/fitnessData/currentState`;
   try {
-    const userDocRef = doc(db, "users", userId, "fitnessData", "currentState");
+    const userDocRef = doc(db, "users", effectiveUserId, "fitnessData", "currentState");
     const unsubscribe = onSnapshot(
       userDocRef,
       (snapshot) => {
@@ -223,6 +415,9 @@ export function subscribeToCloudChanges(
         }
       },
       (error) => {
+        if (error?.code === "permission-denied" || error?.message?.includes("Missing or insufficient permissions")) {
+          handleFirestoreError(error, OperationType.GET, path);
+        }
         console.warn("Firestore real-time subscription error:", error);
       }
     );

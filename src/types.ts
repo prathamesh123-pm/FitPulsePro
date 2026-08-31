@@ -583,6 +583,48 @@ export interface CardioSession {
   notes?: string;
 }
 
+export interface SubmittedDailyReport {
+  date: string;
+  submittedAt: string;
+  locked: boolean;
+  notes?: string;
+  metrics: {
+    caloriesConsumed: number;
+    caloriesBurned: number;
+    remainingCalories: number;
+    proteinGrams: number;
+    waterLiters: number;
+    steps: number;
+    workoutTimeMins: number;
+    gymAttendanceStatus: string;
+    weightKg: number;
+    overallScore: number;
+  };
+  validationChecks: {
+    workoutChecked: boolean;
+    dietChecked: boolean;
+    waterChecked: boolean;
+    stepsChecked: boolean;
+  };
+}
+
+export interface SubmittedMonthlyReport {
+  yearMonth: string; // YYYY-MM
+  submittedAt: string;
+  locked: boolean;
+  monthName: string;
+  year: number;
+  totalDays: number;
+  overallConsistencyPct: number;
+  workoutSessions: number;
+  totalVolumeKg: number;
+  dietAdherencePct: number;
+  gymAttendancePct: number;
+  weightChangeKg: number;
+  monthlyScore: number;
+  notes?: string;
+}
+
 export interface SmartCoachNightlyReport {
   id: string;
   date: string;
@@ -616,6 +658,8 @@ export interface AppState {
   activityLogs: ActivityLog[];
   dailyRoutines: Record<string, DailyRoutineLog>; // key: YYYY-MM-DD
   nightlyReports: Record<string, SmartCoachNightlyReport>; // key: YYYY-MM-DD
+  submittedReports?: Record<string, SubmittedDailyReport>; // key: YYYY-MM-DD
+  submittedMonthlyReports?: Record<string, SubmittedMonthlyReport>; // key: YYYY-MM
   security: SecuritySettings;
   sync: CloudSyncState;
   cloudUser?: {

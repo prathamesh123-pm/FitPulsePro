@@ -91,12 +91,12 @@ export function SecurityProfileModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-3 sm:p-4 text-slate-100 overflow-y-auto">
-      <div className="w-full max-w-2xl rounded-2xl bg-slate-900 border border-slate-800 shadow-2xl overflow-hidden my-6 flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-2.5 sm:p-4 text-slate-100 overflow-y-auto animate-fade-in">
+      <div className="w-full max-w-xl lg:max-w-2xl rounded-2xl bg-slate-900 border border-slate-800 shadow-2xl overflow-hidden my-auto flex flex-col max-h-[88vh]">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-900/50">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-full overflow-hidden border border-slate-700 bg-slate-800">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 border-b border-slate-800 bg-slate-900/80 shrink-0">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="h-9 w-9 sm:h-10 sm:w-10 rounded-full overflow-hidden border border-emerald-500/40 bg-slate-800 shrink-0">
               <img
                 src={formProfile.photoUrl || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80"}
                 alt="Profile"
@@ -104,58 +104,58 @@ export function SecurityProfileModal({
                 referrerPolicy="no-referrer"
               />
             </div>
-            <div>
-              <h2 className="text-base font-semibold text-slate-100">{formProfile.fullName}</h2>
-              <p className="text-xs text-slate-400">{formProfile.email} • {formProfile.fitnessGoal}</p>
+            <div className="min-w-0">
+              <h2 className="text-sm sm:text-base font-bold text-slate-100 truncate">{formProfile.fullName}</h2>
+              <p className="text-[11px] sm:text-xs text-slate-400 truncate">{formProfile.email} • {formProfile.fitnessGoal}</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition cursor-pointer"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition cursor-pointer shrink-0 ml-2"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex border-b border-slate-800 bg-slate-950/40 px-6 pt-2 gap-4">
+        <div className="flex border-b border-slate-800 bg-slate-950/60 px-3 sm:px-6 pt-2 gap-2 sm:gap-4 overflow-x-auto scrollbar-none shrink-0">
           <button
             onClick={() => setActiveTab("profile")}
-            className={`pb-3 text-xs font-semibold flex items-center gap-2 border-b-2 transition cursor-pointer ${
+            className={`pb-2.5 text-xs font-semibold flex items-center gap-1.5 border-b-2 transition cursor-pointer whitespace-nowrap ${
               activeTab === "profile"
-                ? "border-emerald-500 text-emerald-400"
+                ? "border-emerald-500 text-emerald-400 font-bold"
                 : "border-transparent text-slate-400 hover:text-slate-200"
             }`}
           >
-            <User className="h-4 w-4" />
-            Profile & Health Info
+            <User className="h-3.5 w-3.5" />
+            Profile & Health
           </button>
           <button
             onClick={() => setActiveTab("security")}
-            className={`pb-3 text-xs font-semibold flex items-center gap-2 border-b-2 transition cursor-pointer ${
+            className={`pb-2.5 text-xs font-semibold flex items-center gap-1.5 border-b-2 transition cursor-pointer whitespace-nowrap ${
               activeTab === "security"
-                ? "border-emerald-500 text-emerald-400"
+                ? "border-emerald-500 text-emerald-400 font-bold"
                 : "border-transparent text-slate-400 hover:text-slate-200"
             }`}
           >
-            <Shield className="h-4 w-4" />
-            Security & PIN Lock
+            <Shield className="h-3.5 w-3.5" />
+            Security & PIN
           </button>
           <button
             onClick={() => setActiveTab("cloud")}
-            className={`pb-3 text-xs font-semibold flex items-center gap-2 border-b-2 transition cursor-pointer ${
+            className={`pb-2.5 text-xs font-semibold flex items-center gap-1.5 border-b-2 transition cursor-pointer whitespace-nowrap ${
               activeTab === "cloud"
-                ? "border-emerald-500 text-emerald-400"
+                ? "border-emerald-500 text-emerald-400 font-bold"
                 : "border-transparent text-slate-400 hover:text-slate-200"
             }`}
           >
-            <Cloud className="h-4 w-4" />
-            Cloud & Backup
+            <Cloud className="h-3.5 w-3.5" />
+            Cloud Backup
           </button>
         </div>
 
         {/* Modal Body */}
-        <div className="p-6 overflow-y-auto space-y-5 text-sm flex-1">
+        <div className="p-4 sm:p-6 overflow-y-auto space-y-4 text-sm flex-1">
           {saveSuccess && (
             <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2">
               <Check className="h-4 w-4 text-emerald-400" />

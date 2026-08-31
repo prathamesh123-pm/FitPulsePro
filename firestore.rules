@@ -10,12 +10,30 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
+    // Check if the target is a guest or local demo profile
+    function isPermittedGuest(userId) {
+      return userId == 'guest' ||
+             userId == 'default-athlete' ||
+             userId == 'guest_athlete' ||
+             userId == 'user_local' ||
+             userId == 'current-fitness-user';
+    }
+
     match /users/{userId} {
-      allow read, write: if isOwner(userId) || (request.auth == null && (userId == 'guest' || userId == 'default-athlete'));
+      allow read, write: if isOwner(userId) || isPermittedGuest(userId);
       
       match /{allSubcollections=**} {
-        allow read, write: if isOwner(userId) || (request.auth == null && (userId == 'guest' || userId == 'default-athlete'));
+        allow read, write: if isOwner(userId) || isPermittedGuest(userId);
       }
+    }
+
+    // Health check and connection test endpoints
+    match /test/{docId} {
+      allow read, write: if true;
+    }
+
+    match /_connection_test_/{docId} {
+      allow read, write: if true;
     }
     
     match /{document=**} {

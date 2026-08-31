@@ -12,6 +12,7 @@ import {
   Clock,
 } from "lucide-react";
 import { TabId } from "../types";
+import { Language, TRANSLATIONS } from "../utils/i18n";
 
 export type { TabId };
 
@@ -20,27 +21,31 @@ interface NavigationTabsProps {
   onSelectTab: (tab: TabId) => void;
   activeWorkoutCount?: number;
   unreadRemindersCount?: number;
+  lang?: Language;
 }
-
-const TABS: { id: TabId; label: string; icon: any }[] = [
-  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { id: "workout", label: "Workouts", icon: Dumbbell },
-  { id: "diet", label: "Diet & Meals", icon: UtensilsCrossed },
-  { id: "activity", label: "Activities", icon: Footprints },
-  { id: "lifestyle", label: "Lifestyle", icon: Clock },
-  { id: "health", label: "Health & Body", icon: Activity },
-  { id: "calculators", label: "Calculators", icon: Calculator },
-  { id: "coach", label: "Coach & Gym", icon: UserCheck },
-  { id: "checklist", label: "Checklist", icon: CheckSquare },
-  { id: "reports", label: "Reports & AI", icon: BarChart3 },
-  { id: "ailab", label: "AI Lab", icon: Sparkles },
-];
 
 export function NavigationTabs({
   currentTab,
   onSelectTab,
   activeWorkoutCount = 0,
+  lang = "en",
 }: NavigationTabsProps) {
+  const t = TRANSLATIONS[lang] || TRANSLATIONS.en;
+
+  const TABS: { id: TabId; label: string; shortLabel: string; icon: any }[] = [
+    { id: "dashboard", label: t.dashboard, shortLabel: lang === "mr" ? "डॅशबोर्ड" : "Dashboard", icon: LayoutDashboard },
+    { id: "workout", label: t.workout, shortLabel: lang === "mr" ? "व्यायाम" : "Workout", icon: Dumbbell },
+    { id: "diet", label: t.diet, shortLabel: lang === "mr" ? "आहार" : "Diet", icon: UtensilsCrossed },
+    { id: "activity", label: t.activity, shortLabel: lang === "mr" ? "ऍक्टिव्हिटी" : "Activity", icon: Footprints },
+    { id: "lifestyle", label: t.lifestyle, shortLabel: lang === "mr" ? "जीवनशैली" : "Lifestyle", icon: Clock },
+    { id: "health", label: t.health, shortLabel: lang === "mr" ? "आरोग्य" : "Health", icon: Activity },
+    { id: "calculators", label: t.calculators, shortLabel: lang === "mr" ? "कॅल्क्युलेटर" : "Calc", icon: Calculator },
+    { id: "coach", label: t.coach, shortLabel: lang === "mr" ? "कोच" : "Coach", icon: UserCheck },
+    { id: "checklist", label: t.checklist, shortLabel: lang === "mr" ? "चेकलिस्ट" : "Checklist", icon: CheckSquare },
+    { id: "reports", label: t.reports, shortLabel: lang === "mr" ? "अहवाल" : "Reports", icon: BarChart3 },
+    { id: "ailab", label: t.ailab, shortLabel: lang === "mr" ? "AI लॅब" : "AI Lab", icon: Sparkles },
+  ];
+
   return (
     <>
       {/* Desktop / Tablet Top Segmented Bar */}
@@ -54,7 +59,7 @@ export function NavigationTabs({
                 <button
                   key={tab.id}
                   onClick={() => onSelectTab(tab.id)}
-                  className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition cursor-pointer relative whitespace-nowrap ${
+                  className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition cursor-pointer relative whitespace-nowrap ${
                     isActive
                       ? "bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20 font-bold"
                       : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
@@ -93,7 +98,7 @@ export function NavigationTabs({
                 >
                   <Icon className="h-4 w-4" />
                 </div>
-                <span className="mt-0.5 whitespace-nowrap">{tab.label.split(" ")[0]}</span>
+                <span className="mt-0.5 whitespace-nowrap">{tab.shortLabel}</span>
               </button>
             );
           })}

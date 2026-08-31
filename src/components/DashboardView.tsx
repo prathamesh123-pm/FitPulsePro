@@ -27,6 +27,8 @@ import {
   Heart,
   Timer,
   Bike,
+  Layers,
+  Volume2,
 } from "lucide-react";
 import {
   AppState,
@@ -38,6 +40,7 @@ import {
   CoachWorkoutPlan,
 } from "../types";
 import { TabId } from "./NavigationTabs";
+import { Language, TRANSLATIONS } from "../utils/i18n";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -54,6 +57,11 @@ interface DashboardViewProps {
   onQuickAddWater: (amountMl: number) => void;
   onStartWorkout: () => void;
   onOpenAchievements?: () => void;
+  onOpenPlateCalculator?: () => void;
+  onOpenPersonalRecords?: () => void;
+  onOpenWaterTracker?: () => void;
+  onOpenAudioCoach?: () => void;
+  lang?: Language;
 }
 
 export function DashboardView({
@@ -63,7 +71,13 @@ export function DashboardView({
   onQuickAddWater,
   onStartWorkout,
   onOpenAchievements,
+  onOpenPlateCalculator,
+  onOpenPersonalRecords,
+  onOpenWaterTracker,
+  onOpenAudioCoach,
+  lang = "en",
 }: DashboardViewProps) {
+  const t = TRANSLATIONS[lang] || TRANSLATIONS.en;
   const todayKey = "2026-08-28";
   const todayNutrition: DailyNutritionLog = appState.dailyNutrition[todayKey] || {
     date: todayKey,
@@ -323,6 +337,89 @@ export function DashboardView({
             </div>
             <span className="font-bold text-slate-100">{durations.treadmillTimeMin}m</span>
           </div>
+        </div>
+      </div>
+
+      {/* QUICK GYM TOOLS & NEW POWER FEATURES */}
+      <div className="rounded-2xl bg-gradient-to-r from-slate-900 via-slate-900 to-emerald-950/40 border border-slate-800 p-4 shadow-sm space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-400">
+              <Sparkles className="h-4 w-4" />
+            </div>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-200">
+              {lang === "mr" ? "जिम पॉवर टूल्स व झटपट ॲक्सेस" : "Gym OS Power Tools & Quick Access"}
+            </h3>
+          </div>
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-semibold border border-emerald-500/20">
+            {lang === "mr" ? "सक्रिय" : "Live Suite"}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          {/* Barbell Plate Loader */}
+          <button
+            onClick={onOpenPlateCalculator}
+            className="flex flex-col items-start p-3 rounded-xl bg-slate-950/80 hover:bg-slate-800 border border-slate-800 hover:border-emerald-500/40 transition cursor-pointer text-left group"
+          >
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 group-hover:scale-105 transition">
+              <Layers className="h-4 w-4" />
+            </div>
+            <span className="text-xs font-bold text-slate-200 mt-2">
+              {lang === "mr" ? "प्लेट कॅल्क्युलेटर" : "Plate Loader"}
+            </span>
+            <span className="text-[10px] text-slate-400">
+              {lang === "mr" ? "बारबेल प्लेट्स गणना" : "Barbell breakdown"}
+            </span>
+          </button>
+
+          {/* PRs & Trophy Shelf */}
+          <button
+            onClick={onOpenPersonalRecords}
+            className="flex flex-col items-start p-3 rounded-xl bg-slate-950/80 hover:bg-slate-800 border border-slate-800 hover:border-amber-500/40 transition cursor-pointer text-left group"
+          >
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20 group-hover:scale-105 transition">
+              <Trophy className="h-4 w-4" />
+            </div>
+            <span className="text-xs font-bold text-slate-200 mt-2">
+              {lang === "mr" ? "पर्सनल रेकॉर्ड्स (PR)" : "PRs & Records"}
+            </span>
+            <span className="text-[10px] text-slate-400">
+              {lang === "mr" ? "1RM व स्ट्रेंथ ट्रॉफी" : "1RM Strength Shelf"}
+            </span>
+          </button>
+
+          {/* Audio Coach & Timer */}
+          <button
+            onClick={onOpenAudioCoach}
+            className="flex flex-col items-start p-3 rounded-xl bg-slate-950/80 hover:bg-slate-800 border border-slate-800 hover:border-teal-500/40 transition cursor-pointer text-left group"
+          >
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-500/10 text-teal-400 border border-teal-500/20 group-hover:scale-105 transition">
+              <Volume2 className="h-4 w-4" />
+            </div>
+            <span className="text-xs font-bold text-slate-200 mt-2">
+              {lang === "mr" ? "ऑडिओ टाइमर व टेम्पो" : "Audio Timer & Tempo"}
+            </span>
+            <span className="text-[10px] text-slate-400">
+              {lang === "mr" ? "ध्वनी संकेत व मेट्रोनोम" : "Rest beeps & voice"}
+            </span>
+          </button>
+
+          {/* Water Tracker */}
+          <button
+            onClick={onOpenWaterTracker}
+            className="flex flex-col items-start p-3 rounded-xl bg-slate-950/80 hover:bg-slate-800 border border-slate-800 hover:border-cyan-500/40 transition cursor-pointer text-left group"
+          >
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 group-hover:scale-105 transition">
+              <Droplets className="h-4 w-4" />
+            </div>
+            <span className="text-xs font-bold text-slate-200 mt-2">
+              {lang === "mr" ? "पाणी ट्रॅकर" : "Water Tracker"}
+            </span>
+            <span className="text-[10px] text-slate-400">
+              {lang === "mr" ? "हायड्रेशन बॉटल लॉग" : "Visual bottle log"}
+            </span>
+          </button>
         </div>
       </div>
 
