@@ -10,6 +10,9 @@ import {
   Sparkles,
   Footprints,
   Clock,
+  DollarSign,
+  FileCheck,
+  Users,
 } from "lucide-react";
 import { TabId } from "../types";
 import { Language, TRANSLATIONS } from "../utils/i18n";
@@ -34,6 +37,9 @@ export function NavigationTabs({
 
   const TABS: { id: TabId; label: string; shortLabel: string; icon: any }[] = [
     { id: "dashboard", label: t.dashboard, shortLabel: lang === "mr" ? "डॅशबोर्ड" : "Dashboard", icon: LayoutDashboard },
+    { id: "rate-charts", label: lang === "mr" ? "दर पत्रक" : "Rate Charts", shortLabel: lang === "mr" ? "दर पत्रक" : "Tariffs", icon: DollarSign },
+    { id: "forms", label: lang === "mr" ? "फॉर्म्स व ऑडिट" : "Forms & Audits", shortLabel: lang === "mr" ? "फॉर्म्स" : "Forms", icon: FileCheck },
+    { id: "group-reports", label: lang === "mr" ? "गट अहवाल" : "Cohort Reports", shortLabel: lang === "mr" ? "गट अहवाल" : "Cohorts", icon: Users },
     { id: "workout", label: t.workout, shortLabel: lang === "mr" ? "व्यायाम" : "Workout", icon: Dumbbell },
     { id: "diet", label: t.diet, shortLabel: lang === "mr" ? "आहार" : "Diet", icon: UtensilsCrossed },
     { id: "activity", label: t.activity, shortLabel: lang === "mr" ? "ऍक्टिव्हिटी" : "Activity", icon: Footprints },

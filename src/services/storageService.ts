@@ -16,6 +16,15 @@ import {
 } from "../types";
 import { syncAppStateToCloud } from "./firebase";
 import { DEFAULT_SAVED_DIET_PLANS } from "../data/defaultDietPlans";
+import {
+  DEFAULT_USER_ACCOUNT,
+  DEFAULT_RATE_CHARTS,
+  DEFAULT_FORMS,
+  DEFAULT_GROUP_REPORTS,
+  DEFAULT_AUDIT_LOGS,
+  DEFAULT_LOGIN_HISTORY,
+  DEFAULT_NOTIFICATIONS,
+} from "../data/defaultEnterpriseData";
 
 const STORAGE_KEY = "FITPULSE_APP_STATE_V1";
 
@@ -797,6 +806,14 @@ export const DEFAULT_DAILY_ROUTINES: Record<string, DailyRoutineLog> = {
 
 export const INITIAL_STATE: AppState = {
   profile: DEFAULT_PROFILE,
+  currentUserAccount: DEFAULT_USER_ACCOUNT,
+  loginHistory: DEFAULT_LOGIN_HISTORY,
+  auditLogs: DEFAULT_AUDIT_LOGS,
+  rateCharts: DEFAULT_RATE_CHARTS,
+  forms: DEFAULT_FORMS,
+  groupReports: DEFAULT_GROUP_REPORTS,
+  notifications: DEFAULT_NOTIFICATIONS,
+  formDrafts: {},
   activeWorkout: null,
   workoutHistory: DEFAULT_WORKOUT_HISTORY,
   dailyNutrition: DEFAULT_DAILY_NUTRITION,
@@ -865,6 +882,14 @@ export function loadAppState(): AppState {
         ...INITIAL_STATE,
         ...parsed,
         profile: { ...INITIAL_STATE.profile, ...(parsed.profile || {}) },
+        currentUserAccount: parsed.currentUserAccount || DEFAULT_USER_ACCOUNT,
+        loginHistory: (parsed.loginHistory && parsed.loginHistory.length > 0) ? parsed.loginHistory : DEFAULT_LOGIN_HISTORY,
+        auditLogs: (parsed.auditLogs && parsed.auditLogs.length > 0) ? parsed.auditLogs : DEFAULT_AUDIT_LOGS,
+        rateCharts: (parsed.rateCharts && parsed.rateCharts.length > 0) ? parsed.rateCharts : DEFAULT_RATE_CHARTS,
+        forms: (parsed.forms && parsed.forms.length > 0) ? parsed.forms : DEFAULT_FORMS,
+        groupReports: (parsed.groupReports && parsed.groupReports.length > 0) ? parsed.groupReports : DEFAULT_GROUP_REPORTS,
+        notifications: (parsed.notifications && parsed.notifications.length > 0) ? parsed.notifications : DEFAULT_NOTIFICATIONS,
+        formDrafts: parsed.formDrafts || {},
         security: { ...INITIAL_STATE.security, ...(parsed.security || {}) },
         membership: {
           ...INITIAL_STATE.membership,

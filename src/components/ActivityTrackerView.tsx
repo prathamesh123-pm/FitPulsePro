@@ -1,416 +1,245 @@
-import React, { useState, useMemo } from "react";
+import React, { useState } from "react";
+import { motion } from "motion/react";
 import {
   Activity,
-  Plus,
-  Trash2,
+  Search,
+  Filter,
+  CheckCircle2,
+  XCircle,
   Clock,
-  Flame,
-  Heart,
-  Gauge,
+  Shield,
+  Smartphone,
   MapPin,
   Calendar,
-  Footprints,
-  Bike,
-  Waves,
-  Trophy,
-  X,
-  Check,
+  Layers,
+  Sparkles,
+  Download,
+  Eye,
+  UserCheck,
+  UserX,
 } from "lucide-react";
-import { ActivityLog } from "../types";
+import { AppState, AuditLogEntry, UserRole } from "../types";
 
 interface ActivityTrackerViewProps {
-  activityLogs: ActivityLog[];
-  onUpdateActivityLogs: (logs: ActivityLog[]) => void;
-  initialDate?: string;
+  state: AppState;
+  onUpdateState: (updater: (prev: AppState) => AppState) => void;
+  onNotify: (title: string, message: string, type: "success" | "info" | "warning" | "error") => void;
 }
 
-const ACTIVITY_TYPES: { type: ActivityLog["activityType"]; icon: any; color: string }[] = [
-  { type: "Walking", icon: Footprints, color: "text-emerald-400" },
-  { type: "Running", icon: Activity, color: "text-rose-400" },
-  { type: "Cycling", icon: Bike, color: "text-sky-400" },
-  { type: "Treadmill", icon: Clock, color: "text-amber-400" },
-  { type: "Swimming", icon: Waves, color: "text-cyan-400" },
-  { type: "Other Sports", icon: Trophy, color: "text-violet-400" },
-];
+export const ActivityTrackerView: React.FC<ActivityTrackerViewProps> = ({
+  state,
+  onUpdateState,
+  onNotify,
+}) => {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedModule, setSelectedModule] = useState<string>("All");
+  const [selectedAction, setSelectedAction] = useState<string>("All");
+  const [selectedRole, setSelectedRole] = useState<string>("All");
 
-export function ActivityTrackerView({
-  activityLogs,
-  onUpdateActivityLogs,
-  initialDate = "2026-08-28",
-}: ActivityTrackerViewProps) {
-  const [selectedDate, setSelectedDate] = useState(initialDate);
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const modules = ["All", "Rate Charts", "Forms", "Group Reports", "Workouts", "Nutrition", "Membership", "Authentication", "Security"];
+  const actions = ["All", "Created", "Edited", "Deleted", "Submitted", "Approved", "Rejected", "Login", "Logout", "Exported"];
+  const roles = ["All", "Admin", "Manager", "Staff"];
 
-  // Form State
-  const [formType, setFormType] = useState<ActivityLog["activityType"]>("Walking");
-  const [formStartTime, setFormStartTime] = useState("07:30");
-  const [formDuration, setFormDuration] = useState(40);
-  const [formDistance, setFormDistance] = useState(3.5);
-  const [formCalories, setFormCalories] = useState(190);
-  const [formSpeed, setFormSpeed] = useState(5.2);
-  const [formHeartRate, setFormHeartRate] = useState(115);
-  const [formRouteNotes, setFormRouteNotes] = useState("");
+  const logs = state.auditLogs || [];
 
-  // Filter logs for selected date
-  const filteredLogs = useMemo(() => {
-    return activityLogs.filter((log) => log.date === selectedDate);
-  }, [activityLogs, selectedDate]);
+  const filteredLogs = logs.filter((log) => {
+    const matchesModule = selectedModule === "All" || log.module === selectedModule;
+    const matchesAction = selectedAction === "All" || log.action === selectedAction;
+    const matchesRole = selectedRole === "All" || log.userRole === selectedRole;
+    const matchesSearch =
+      log.userName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      log.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      log.module.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      log.action.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesModule && matchesAction && matchesRole && matchesSearch;
+  });
 
-  // Compute Daily Activity Summary
-  const summary = useMemo(() => {
-    let totalCalories = 0;
-    let totalMinutes = 0;
-    let totalDistanceKm = 0;
-
-    filteredLogs.forEach((l) => {
-      totalCalories += l.caloriesBurned || 0;
-      totalMinutes += l.durationMinutes || 0;
-      totalDistanceKm += l.distanceKm || 0;
-    });
-
-    return {
-      totalCalories,
-      totalMinutes,
-      totalDistanceKm: Math.round(totalDistanceKm * 10) / 10,
-      activityCount: filteredLogs.length,
-    };
-  }, [filteredLogs]);
-
-  const handleAddActivity = (e: React.FormEvent) => {
-    e.preventDefault();
-    const newLog: ActivityLog = {
-      id: `act-${Date.now()}`,
-      date: selectedDate,
-      activityType: formType,
-      startTime: formStartTime,
-      durationMinutes: Number(formDuration) || 30,
-      distanceKm: Number(formDistance) || 0,
-      caloriesBurned: Number(formCalories) || 150,
-      avgSpeedKmh: Number(formSpeed) || undefined,
-      heartRateBpm: Number(formHeartRate) || undefined,
-      routeNotes: formRouteNotes.trim() || undefined,
-    };
-
-    onUpdateActivityLogs([newLog, ...activityLogs]);
-    setIsAddModalOpen(false);
-    setFormRouteNotes("");
+  const handleApproveAction = (logId: string) => {
+    onNotify("Approved", "Submission approved by management.", "success");
+    onUpdateState((prev) => ({
+      ...prev,
+      auditLogs: (prev.auditLogs || []).map((l) =>
+        l.id === logId ? { ...l, action: "Approved" as any, description: `${l.description} [APPROVED]` } : l
+      ),
+    }));
   };
 
-  const handleDeleteActivity = (id: string) => {
-    if (!confirm("Are you sure you want to delete this activity log?")) return;
-    onUpdateActivityLogs(activityLogs.filter((l) => l.id !== id));
-  };
-
-  const getActivityIcon = (type: ActivityLog["activityType"]) => {
-    const found = ACTIVITY_TYPES.find((a) => a.type === type);
-    return found ? found.icon : Activity;
+  const handleRejectAction = (logId: string) => {
+    onNotify("Rejected", "Action marked as rejected.", "warning");
+    onUpdateState((prev) => ({
+      ...prev,
+      auditLogs: (prev.auditLogs || []).map((l) =>
+        l.id === logId ? { ...l, action: "Rejected" as any, description: `${l.description} [REJECTED]` } : l
+      ),
+    }));
   };
 
   return (
-    <div className="space-y-6 animate-fadeIn pb-28 md:pb-12 overflow-x-hidden">
+    <div className="space-y-6">
       {/* Top Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-6 rounded-3xl bg-slate-900 border border-slate-800 shadow-xl">
-        <div className="flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-500/10 text-rose-400 border border-rose-500/20">
-            <Activity className="h-6 w-6" />
+      <div className="p-6 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-900/90 to-emerald-950/40 border border-slate-800 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-extrabold uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1">
+              <Shield className="w-3 h-3 text-emerald-400" />
+              Real-Time Audit Trail
+            </span>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+              {logs.length} Total Logged Events
+            </span>
           </div>
-          <div>
-            <h2 className="text-xl font-extrabold text-slate-100">Activity Tracker</h2>
-            <p className="text-xs text-slate-400">
-              Track physical activities outside lifting: Walking, Running, Cycling, Swimming & Sports.
-            </p>
-          </div>
+          <h1 className="text-xl md:text-2xl font-black text-white tracking-tight flex items-center gap-2.5">
+            <Activity className="w-6 h-6 text-emerald-400" />
+            Enterprise Activity Tracking & Audit Trail
+          </h1>
+          <p className="text-xs text-slate-400">
+            Immutable log • Date & Time • User & Role • GPS Coordinates • Device & IP • Actions (Created, Edited, Deleted, Submitted, Approved, Rejected)
+          </p>
         </div>
+      </div>
 
-        <div className="flex items-center gap-3">
-          {/* Date Picker */}
-          <div className="flex items-center gap-2 bg-slate-950 px-3 py-2 rounded-2xl border border-slate-800">
-            <Calendar className="h-4 w-4 text-slate-400" />
+      {/* Filter Bar */}
+      <div className="p-4 bg-slate-900/80 border border-slate-800 rounded-2xl space-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+          {/* Search */}
+          <div className="relative">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
             <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="bg-transparent text-slate-200 text-xs font-bold focus:outline-none cursor-pointer"
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search user, action, notes..."
+              className="w-full bg-slate-800 border border-slate-700 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
             />
           </div>
 
-          <button
-            onClick={() => setIsAddModalOpen(true)}
-            className="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl bg-rose-500 hover:bg-rose-400 text-slate-950 font-black text-xs transition shadow-lg shadow-rose-500/20 cursor-pointer"
-          >
-            <Plus className="h-4 w-4" />
-            <span>Log Activity</span>
-          </button>
+          {/* Module Filter */}
+          <div>
+            <select
+              value={selectedModule}
+              onChange={(e) => setSelectedModule(e.target.value)}
+              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+            >
+              {modules.map((m) => (
+                <option key={m} value={m}>Module: {m}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Action Filter */}
+          <div>
+            <select
+              value={selectedAction}
+              onChange={(e) => setSelectedAction(e.target.value)}
+              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+            >
+              {actions.map((a) => (
+                <option key={a} value={a}>Action: {a}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Role Filter */}
+          <div>
+            <select
+              value={selectedRole}
+              onChange={(e) => setSelectedRole(e.target.value)}
+              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+            >
+              {roles.map((r) => (
+                <option key={r} value={r}>Role: {r}</option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
-      {/* Daily Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 text-center">
-          <div className="flex items-center justify-center gap-1.5 text-xs text-slate-400 mb-1">
-            <Flame className="h-4 w-4 text-rose-400" />
-            <span>Total Burned</span>
-          </div>
-          <span className="text-2xl font-black text-slate-100">{summary.totalCalories}</span>
-          <span className="text-[10px] text-slate-500 block">kcal</span>
-        </div>
-
-        <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 text-center">
-          <div className="flex items-center justify-center gap-1.5 text-xs text-slate-400 mb-1">
-            <Clock className="h-4 w-4 text-sky-400" />
-            <span>Active Time</span>
-          </div>
-          <span className="text-2xl font-black text-slate-100">{summary.totalMinutes}</span>
-          <span className="text-[10px] text-slate-500 block">minutes</span>
-        </div>
-
-        <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 text-center">
-          <div className="flex items-center justify-center gap-1.5 text-xs text-slate-400 mb-1">
-            <MapPin className="h-4 w-4 text-emerald-400" />
-            <span>Total Distance</span>
-          </div>
-          <span className="text-2xl font-black text-slate-100">{summary.totalDistanceKm}</span>
-          <span className="text-[10px] text-slate-500 block">km</span>
-        </div>
-
-        <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 text-center">
-          <div className="flex items-center justify-center gap-1.5 text-xs text-slate-400 mb-1">
-            <Activity className="h-4 w-4 text-amber-400" />
-            <span>Activities</span>
-          </div>
-          <span className="text-2xl font-black text-slate-100">{summary.activityCount}</span>
-          <span className="text-[10px] text-slate-500 block">sessions logged</span>
-        </div>
-      </div>
-
-      {/* Activity Logs List */}
-      <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 shadow-xl space-y-4">
-        <h3 className="font-extrabold text-sm text-slate-200">
-          Activities on {selectedDate}
-        </h3>
-
+      {/* Audit Logs List */}
+      <div className="space-y-3">
         {filteredLogs.length === 0 ? (
-          <div className="text-center py-12">
-            <Activity className="h-10 w-10 text-slate-600 mx-auto mb-2" />
-            <p className="text-sm font-bold text-slate-300">No activities logged for this date</p>
-            <p className="text-xs text-slate-500 mt-1">
-              Click &quot;Log Activity&quot; above to add walking, running, cycling or sports.
-            </p>
+          <div className="p-8 text-center bg-slate-900/50 border border-slate-800 rounded-2xl space-y-2">
+            <Activity className="w-8 h-8 text-slate-600 mx-auto" />
+            <p className="text-xs text-slate-400">No activity logs matching the selected filter criteria.</p>
           </div>
         ) : (
-          <div className="divide-y divide-slate-800/80">
-            {filteredLogs.map((log) => {
-              const Icon = getActivityIcon(log.activityType);
-              return (
-                <div
-                  key={log.id}
-                  className="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="p-3 rounded-2xl bg-slate-950 border border-slate-800 text-rose-400">
-                      <Icon className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-extrabold text-sm text-slate-100">
-                          {log.activityType}
-                        </span>
-                        <span className="text-xs text-slate-400 font-medium">
-                          at {log.startTime}
-                        </span>
-                      </div>
-                      {log.routeNotes && (
-                        <p className="text-xs text-slate-400 mt-0.5">{log.routeNotes}</p>
-                      )}
-                      <div className="flex items-center gap-3 mt-1 text-[11px] text-slate-400 flex-wrap">
-                        <span>{log.durationMinutes} mins</span>
-                        {log.distanceKm ? <span>• {log.distanceKm} km</span> : null}
-                        {log.avgSpeedKmh ? (
-                          <span className="flex items-center gap-1">
-                            <Gauge className="h-3 w-3 text-slate-500" />
-                            {log.avgSpeedKmh} km/h
-                          </span>
-                        ) : null}
-                        {log.heartRateBpm ? (
-                          <span className="flex items-center gap-1 text-rose-400">
-                            <Heart className="h-3 w-3" />
-                            {log.heartRateBpm} bpm
-                          </span>
-                        ) : null}
-                      </div>
-                    </div>
-                  </div>
+          filteredLogs.map((log) => (
+            <div
+              key={log.id}
+              className="p-4 rounded-2xl bg-slate-900 border border-slate-800 hover:border-slate-700 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-all hover:shadow-lg"
+            >
+              <div className="space-y-1.5 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span
+                    className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border ${
+                      log.action === "Created" || log.action === "Approved" || log.action === "Submitted"
+                        ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                        : log.action === "Deleted" || log.action === "Rejected"
+                        ? "bg-rose-500/20 text-rose-300 border-rose-500/40"
+                        : log.action === "Edited"
+                        ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                        : "bg-blue-500/20 text-blue-300 border-blue-500/40"
+                    }`}
+                  >
+                    {log.action}
+                  </span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+                    {log.module}
+                  </span>
+                  <span className="text-xs font-bold text-white">{log.userName}</span>
+                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 font-bold border border-purple-500/30">
+                    {log.userRole}
+                  </span>
+                </div>
 
-                  <div className="flex items-center justify-between sm:justify-end gap-4">
-                    <div className="text-right">
-                      <span className="font-black text-rose-400 text-base block">
-                        +{log.caloriesBurned} kcal
+                <p className="text-xs text-slate-300">{log.description}</p>
+
+                <div className="flex flex-wrap items-center gap-3 text-[10px] text-slate-500 pt-0.5">
+                  <span className="flex items-center gap-1">
+                    <Calendar className="w-3 h-3 text-slate-400" />
+                    {new Date(log.timestamp).toLocaleDateString()} {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Smartphone className="w-3 h-3 text-slate-400" />
+                    {log.device}
+                  </span>
+                  {log.gpsLocation && (
+                    <span className="flex items-center gap-1 text-emerald-400/80">
+                      <MapPin className="w-3 h-3 text-emerald-400 shrink-0" />
+                      <span>
+                        {typeof log.gpsLocation === "object"
+                          ? (log.gpsLocation.address || `${log.gpsLocation.latitude.toFixed(4)}° N, ${log.gpsLocation.longitude.toFixed(4)}° E`)
+                          : String(log.gpsLocation)}
                       </span>
-                      <span className="text-[10px] text-slate-500">Burned</span>
-                    </div>
+                    </span>
+                  )}
+                  {log.ipAddress && <span>IP: {log.ipAddress}</span>}
+                </div>
+              </div>
 
+              {/* Action Buttons for Managers / Admins */}
+              {(state.currentUserAccount?.role === "Admin" || state.currentUserAccount?.role === "Manager") &&
+                log.action === "Submitted" && (
+                  <div className="flex items-center gap-2">
                     <button
-                      onClick={() => handleDeleteActivity(log.id)}
-                      className="p-2 rounded-xl text-slate-500 hover:text-rose-400 hover:bg-slate-800 transition cursor-pointer"
+                      onClick={() => handleApproveAction(log.id)}
+                      className="px-2.5 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-xs font-bold border border-emerald-500/40 flex items-center gap-1"
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      Approve
+                    </button>
+                    <button
+                      onClick={() => handleRejectAction(log.id)}
+                      className="px-2.5 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 text-xs font-bold border border-rose-500/40 flex items-center gap-1"
+                    >
+                      <XCircle className="w-3.5 h-3.5" />
+                      Reject
                     </button>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                )}
+            </div>
+          ))
         )}
       </div>
-
-      {/* Add Activity Modal */}
-      {isAddModalOpen && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center p-3 sm:p-6 bg-slate-950/80 backdrop-blur-sm animate-fadeIn overflow-y-auto">
-          <div className="w-full max-w-lg bg-slate-900 border border-slate-700 rounded-3xl p-5 sm:p-6 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto my-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <div className="flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-rose-500/20 text-rose-400">
-                  <Activity className="h-4 w-4" />
-                </div>
-                <h3 className="text-base font-extrabold text-slate-100">Log Physical Activity</h3>
-              </div>
-              <button
-                onClick={() => setIsAddModalOpen(false)}
-                className="text-slate-400 hover:text-slate-200"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleAddActivity} className="space-y-3.5 text-xs">
-              <div>
-                <label className="block text-slate-300 font-bold mb-1.5">Activity Type *</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {ACTIVITY_TYPES.map((act) => (
-                    <button
-                      type="button"
-                      key={act.type}
-                      onClick={() => setFormType(act.type)}
-                      className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                        formType === act.type
-                          ? "bg-rose-500 text-slate-950 border-rose-500 shadow-md shadow-rose-500/20"
-                          : "bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-800"
-                      }`}
-                    >
-                      <span>{act.type}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">Start Time</label>
-                  <input
-                    type="time"
-                    value={formStartTime}
-                    onChange={(e) => setFormStartTime(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 focus:outline-none focus:border-rose-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">Duration (Minutes) *</label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={600}
-                    required
-                    value={formDuration}
-                    onChange={(e) => setFormDuration(Number(e.target.value))}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 focus:outline-none focus:border-rose-500"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">Distance (km)</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min={0}
-                    value={formDistance}
-                    onChange={(e) => setFormDistance(Number(e.target.value))}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 focus:outline-none focus:border-rose-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">Calories Burned (kcal) *</label>
-                  <input
-                    type="number"
-                    min={10}
-                    max={3000}
-                    required
-                    value={formCalories}
-                    onChange={(e) => setFormCalories(Number(e.target.value))}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 focus:outline-none focus:border-rose-500"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">Avg Speed (km/h)</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min={0}
-                    value={formSpeed}
-                    onChange={(e) => setFormSpeed(Number(e.target.value))}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 focus:outline-none focus:border-rose-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">Avg Heart Rate (bpm)</label>
-                  <input
-                    type="number"
-                    min={40}
-                    max={220}
-                    value={formHeartRate}
-                    onChange={(e) => setFormHeartRate(Number(e.target.value))}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 focus:outline-none focus:border-rose-500"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-slate-300 font-bold mb-1">Route / Notes</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Riverside park morning run, cool weather, high cadence"
-                  value={formRouteNotes}
-                  onChange={(e) => setFormRouteNotes(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 focus:outline-none focus:border-rose-500"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setIsAddModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-slate-400 hover:text-slate-200 transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-xl bg-rose-500 hover:bg-rose-400 text-slate-950 font-black transition shadow-lg shadow-rose-500/20"
-                >
-                  Save Activity Log
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
-}
+};

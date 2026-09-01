@@ -16,6 +16,9 @@ export type Gender = "Male" | "Female" | "Other";
 
 export type TabId =
   | "dashboard"
+  | "rate-charts"
+  | "forms"
+  | "group-reports"
   | "workout"
   | "diet"
   | "activity"
@@ -635,8 +638,198 @@ export interface SmartCoachNightlyReport {
   encouragement: string;
 }
 
+export type UserRole = "Admin" | "Manager" | "Staff";
+
+export interface UserAccount {
+  uid: string;
+  email: string;
+  mobileNumber?: string;
+  displayName: string;
+  photoURL?: string;
+  role: UserRole;
+  department?: string;
+  createdAt: string;
+  lastLoginAt: string;
+  status: "Active" | "Suspended" | "Pending";
+}
+
+export interface LoginHistoryRecord {
+  id: string;
+  userId: string;
+  userName: string;
+  userRole: UserRole;
+  timestamp: string;
+  device: string;
+  ipAddress: string;
+  location: string;
+  method: "Email/Password" | "Mobile OTP" | "Google Sign-In" | "Biometric/PIN";
+  status: "Success" | "Failed";
+  browser: string;
+}
+
+export type AuditActionType =
+  | "Created"
+  | "Edited"
+  | "Deleted"
+  | "Submitted"
+  | "Approved"
+  | "Rejected"
+  | "Login"
+  | "Logout"
+  | "Synced"
+  | "Exported"
+  | "Draft Saved";
+
+export type AuditModule =
+  | "Rate Charts"
+  | "Forms"
+  | "Reports"
+  | "Group Reports"
+  | "Workouts"
+  | "Diet"
+  | "Membership"
+  | "Security"
+  | "User Management"
+  | "Cloud Sync";
+
+export interface AuditLogEntry {
+  id: string;
+  timestamp: string;
+  userId: string;
+  userName: string;
+  userRole: UserRole;
+  action: AuditActionType;
+  module: AuditModule;
+  description: string;
+  targetId?: string;
+  device: string;
+  ipAddress?: string;
+  gpsLocation?: {
+    latitude: number;
+    longitude: number;
+    accuracy?: number;
+    address?: string;
+  };
+  details?: Record<string, any>;
+  status?: "Approved" | "Rejected" | "Pending" | "Completed";
+}
+
+export interface RateChartItem {
+  id: string;
+  serviceCode: string;
+  name: string;
+  category: "Gym Membership" | "Personal Training" | "Diet & Nutrition Consultation" | "Body Composition Scan" | "Supplement Pack" | "Recovery & Spa";
+  duration: string; // e.g. "1 Month", "3 Months", "Annual", "Per Session"
+  basePrice: number;
+  taxPct: number;
+  discountPct: number;
+  finalPrice: number;
+  currency: string;
+  features: string[];
+  isActive: boolean;
+  notes?: string;
+  updatedAt: string;
+}
+
+export interface EnterpriseRateChart {
+  id: string;
+  title: string;
+  version: string;
+  effectiveDate: string;
+  currency: string;
+  items: RateChartItem[];
+  createdBy: string;
+  updatedAt: string;
+  approvedBy?: string;
+  status: "Draft" | "Published" | "Archived";
+}
+
+export interface DynamicFormField {
+  id: string;
+  label: string;
+  type: "text" | "number" | "select" | "textarea" | "checkbox" | "date" | "radio" | "rating" | "signature";
+  placeholder?: string;
+  options?: string[];
+  required: boolean;
+  value: any;
+}
+
+export interface FormSubmissionRecord {
+  id: string;
+  formType: "Client Intake & PAR-Q" | "Daily Compliance Audit" | "Coach Session Evaluation" | "Fitness Assessment Review" | "Incident & Mistake Report" | "Custom Form";
+  title: string;
+  userId: string;
+  userName: string;
+  userRole: UserRole;
+  fields: DynamicFormField[];
+  status: "Draft" | "Submitted" | "Approved" | "Rejected";
+  createdAt: string;
+  updatedAt: string;
+  submittedAt?: string;
+  reviewedBy?: string;
+  reviewNotes?: string;
+  signatureUrl?: string;
+  gpsLocation?: string;
+  autoSavedAt?: string;
+  isDraft: boolean;
+}
+
+export interface GroupReportMemberProgress {
+  memberId: string;
+  memberName: string;
+  startingWeightKg: number;
+  currentWeightKg: number;
+  attendancePct: number;
+  dietScore: number;
+  workoutsCompleted: number;
+  notes: string;
+  certified: boolean;
+}
+
+export interface EnterpriseGroupReport {
+  id: string;
+  title: string;
+  cohortName: string;
+  reportPeriod: string; // e.g. "August 2026", "Q3 2026"
+  dateRange: {
+    startDate: string;
+    endDate: string;
+  };
+  coachName: string;
+  organizationName: string;
+  members: GroupReportMemberProgress[];
+  averageAttendancePct: number;
+  overallConsistencyPct: number;
+  summaryNotes: string;
+  recommendations: string;
+  status: "Draft" | "Partially Completed" | "Submitted" | "Approved" | "Archived";
+  createdAt: string;
+  updatedAt: string;
+  submittedAt?: string;
+  autoSavedAt?: string;
+  approvedBy?: string;
+}
+
+export interface AppNotification {
+  id: string;
+  title: string;
+  message: string;
+  type: "success" | "info" | "warning" | "error";
+  category: "Draft" | "Sync" | "Auth" | "Report" | "Backup" | "System";
+  timestamp: string;
+  read: boolean;
+}
+
 export interface AppState {
   profile: UserProfile;
+  currentUserAccount?: UserAccount;
+  loginHistory: LoginHistoryRecord[];
+  auditLogs: AuditLogEntry[];
+  rateCharts: EnterpriseRateChart[];
+  forms: FormSubmissionRecord[];
+  groupReports: EnterpriseGroupReport[];
+  notifications: AppNotification[];
+  formDrafts: Record<string, FormSubmissionRecord>;
   activeWorkout: WorkoutSession | null;
   workoutHistory: WorkoutSession[];
   dailyNutrition: Record<string, DailyNutritionLog>; // key: YYYY-MM-DD
@@ -667,8 +860,10 @@ export interface AppState {
     email?: string;
     displayName?: string;
     photoURL?: string;
+    role?: UserRole;
     isAnonymous?: boolean;
   } | null;
   darkMode: boolean;
 }
+
 

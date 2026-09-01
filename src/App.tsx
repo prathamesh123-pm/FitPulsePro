@@ -54,13 +54,55 @@ import { PlateCalculatorModal } from "./components/PlateCalculatorModal";
 import { PersonalRecordsModal } from "./components/PersonalRecordsModal";
 import { WaterTrackerModal } from "./components/WaterTrackerModal";
 import { AudioCoachHUD } from "./components/AudioCoachHUD";
+import { EnterpriseAuthModal } from "./components/EnterpriseAuthModal";
+import { EnterpriseDashboardView } from "./components/EnterpriseDashboardView";
+import { EnterpriseRateChartsView } from "./components/EnterpriseRateChartsView";
+import { EnterpriseFormsView } from "./components/EnterpriseFormsView";
+import { EnterpriseGroupReportsView } from "./components/EnterpriseGroupReportsView";
+import { ToastNotificationContainer, NotificationDrawer } from "./components/NotificationsSystem";
 import { Language } from "./utils/i18n";
-import { Exercise, WorkoutTemplate, ActivityLog, DailyRoutineLog } from "./types";
+import { Exercise, WorkoutTemplate, ActivityLog, DailyRoutineLog, AppNotification } from "./types";
 
 export default function App() {
   const [appState, setAppState] = useState<AppState>(() => loadAppState());
   const [isLocked, setIsLocked] = useState<boolean>(() => Boolean(appState.security?.isLocked && appState.security?.pinEnabled));
   const [activeTab, setActiveTab] = useState<TabId>("dashboard");
+
+  // Notifications State
+  const [notifications, setNotifications] = useState<AppNotification[]>(() => appState.notifications || []);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [isEnterpriseAuthOpen, setIsEnterpriseAuthOpen] = useState(false);
+
+  const handleNotify = (
+    title: string,
+    message: string,
+    type: "success" | "info" | "warning" | "error" = "info",
+    category: "Draft" | "Sync" | "Auth" | "Report" | "Backup" | "System" = "System"
+  ) => {
+    const newNotif: AppNotification = {
+      id: `notif-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+      title,
+      message,
+      type,
+      category,
+      timestamp: new Date().toISOString(),
+      read: false,
+    };
+    setNotifications((prev) => [newNotif, ...prev]);
+    setAppState((prev) => ({
+      ...prev,
+      notifications: [newNotif, ...(prev.notifications || []).slice(0, 49)],
+    }));
+  };
+
+  const handleDismissNotification = (id: string) => {
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+  };
+
+  const handleClearAllNotifications = () => {
+    setNotifications([]);
+    setAppState((prev) => ({ ...prev, notifications: [] }));
+  };
 
   // Language state (persisted)
   const [lang, setLang] = useState<Language>(() => {
@@ -497,6 +539,8 @@ export default function App() {
         sync={appState.sync}
         membership={appState.membership}
         darkMode={appState.darkMode}
+        userRole={appState.currentUserAccount?.role || "Admin"}
+        unreadNotificationsCount={notifications.length}
         onToggleDarkMode={handleToggleDarkMode}
         onOpenProfile={() => setIsProfileModalOpen(true)}
         onLockApp={() => setIsLocked(true)}
@@ -507,8 +551,34 @@ export default function App() {
         onOpenPersonalRecords={() => setIsPRModalOpen(true)}
         onOpenWaterTracker={() => setIsWaterTrackerOpen(true)}
         onOpenAudioCoach={() => setIsAudioCoachOpen(true)}
+        onOpenEnterpriseAuth={() => setIsEnterpriseAuthOpen(true)}
+        onOpenNotifications={() => setIsNotificationsOpen(true)}
         lang={lang}
         onToggleLanguage={handleToggleLanguage}
+      />
+
+      {/* Floating Real-time Toast Notifications */}
+      <ToastNotificationContainer
+        notifications={notifications}
+        onDismiss={handleDismissNotification}
+      />
+
+      {/* Slide-in Notifications Drawer */}
+      <NotificationDrawer
+        isOpen={isNotificationsOpen}
+        onClose={() => setIsNotificationsOpen(false)}
+        notifications={notifications}
+        onClearAll={handleClearAllNotifications}
+        onDismiss={handleDismissNotification}
+      />
+
+      {/* Enterprise Authentication & RBAC Modal */}
+      <EnterpriseAuthModal
+        isOpen={isEnterpriseAuthOpen}
+        onClose={() => setIsEnterpriseAuthOpen(false)}
+        state={appState}
+        onUpdateState={setAppState}
+        onNotify={handleNotify}
       />
 
       {/* Main Container */}
@@ -524,18 +594,52 @@ export default function App() {
         {/* Tab Content Switcher */}
         <div className="mt-6">
           {activeTab === "dashboard" && (
-            <DashboardView
-              appState={appState}
-              healthMetrics={healthMetrics}
-              onNavigate={(tab) => setActiveTab(tab)}
-              onQuickAddWater={handleQuickAddWater}
-              onStartWorkout={handleStartWorkout}
-              onOpenAchievements={() => setIsAchievementsModalOpen(true)}
-              onOpenPlateCalculator={() => setIsPlateCalculatorOpen(true)}
-              onOpenPersonalRecords={() => setIsPRModalOpen(true)}
-              onOpenWaterTracker={() => setIsWaterTrackerOpen(true)}
-              onOpenAudioCoach={() => setIsAudioCoachOpen(true)}
-              lang={lang}
+            <div className="space-y-8">
+              <EnterpriseDashboardView
+                state={appState}
+                onUpdateState={setAppState}
+                onNavigateTab={(tab) => setActiveTab(tab as TabId)}
+                onNotify={handleNotify}
+              />
+              <div className="border-t border-slate-800 pt-6">
+                <DashboardView
+                  appState={appState}
+                  healthMetrics={healthMetrics}
+                  onNavigate={(tab) => setActiveTab(tab)}
+                  onQuickAddWater={handleQuickAddWater}
+                  onStartWorkout={handleStartWorkout}
+                  onOpenAchievements={() => setIsAchievementsModalOpen(true)}
+                  onOpenPlateCalculator={() => setIsPlateCalculatorOpen(true)}
+                  onOpenPersonalRecords={() => setIsPRModalOpen(true)}
+                  onOpenWaterTracker={() => setIsWaterTrackerOpen(true)}
+                  onOpenAudioCoach={() => setIsAudioCoachOpen(true)}
+                  lang={lang}
+                />
+              </div>
+            </div>
+          )}
+
+          {activeTab === "rate-charts" && (
+            <EnterpriseRateChartsView
+              state={appState}
+              onUpdateState={setAppState}
+              onNotify={handleNotify}
+            />
+          )}
+
+          {activeTab === "forms" && (
+            <EnterpriseFormsView
+              state={appState}
+              onUpdateState={setAppState}
+              onNotify={handleNotify}
+            />
+          )}
+
+          {activeTab === "group-reports" && (
+            <EnterpriseGroupReportsView
+              state={appState}
+              onUpdateState={setAppState}
+              onNotify={handleNotify}
             />
           )}
 
@@ -571,8 +675,9 @@ export default function App() {
 
           {activeTab === "activity" && (
             <ActivityTrackerView
-              activityLogs={appState.activityLogs || []}
-              onUpdateActivityLogs={handleUpdateActivityLogs}
+              state={appState}
+              onUpdateState={setAppState}
+              onNotify={handleNotify}
             />
           )}
 

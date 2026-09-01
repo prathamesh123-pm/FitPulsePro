@@ -91,10 +91,10 @@ export function SecurityProfileModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-2.5 sm:p-4 text-slate-100 overflow-y-auto animate-fade-in">
-      <div className="w-full max-w-xl lg:max-w-2xl rounded-2xl bg-slate-900 border border-slate-800 shadow-2xl overflow-hidden my-auto flex flex-col max-h-[88vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-2 sm:p-4 text-slate-100 overflow-y-auto animate-fade-in">
+      <div className="w-full max-w-xl lg:max-w-2xl rounded-2xl bg-slate-900 border border-slate-800 shadow-2xl overflow-hidden my-auto flex flex-col max-h-[90vh] transition-all">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 border-b border-slate-800 bg-slate-900/80 shrink-0">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 border-b border-slate-800 bg-slate-900/90 shrink-0">
           <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
             <div className="h-9 w-9 sm:h-10 sm:w-10 rounded-full overflow-hidden border border-emerald-500/40 bg-slate-800 shrink-0">
               <img
@@ -155,7 +155,7 @@ export function SecurityProfileModal({
         </div>
 
         {/* Modal Body */}
-        <div className="p-4 sm:p-6 overflow-y-auto space-y-4 text-sm flex-1">
+        <div className="p-3.5 sm:p-6 overflow-y-auto space-y-4 text-sm flex-1 scrollbar-thin scrollbar-thumb-slate-700">
           {saveSuccess && (
             <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2">
               <Check className="h-4 w-4 text-emerald-400" />

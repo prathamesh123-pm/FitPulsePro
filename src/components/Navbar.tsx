@@ -12,8 +12,10 @@ import {
   Droplets,
   Timer,
   Globe,
+  Bell,
+  UserCheck,
 } from "lucide-react";
-import { UserProfile, CloudSyncState, GymMembership } from "../types";
+import { UserProfile, CloudSyncState, GymMembership, UserRole } from "../types";
 import { Language, TRANSLATIONS } from "../utils/i18n";
 
 interface NavbarProps {
@@ -21,6 +23,8 @@ interface NavbarProps {
   sync: CloudSyncState;
   membership: GymMembership;
   darkMode: boolean;
+  userRole?: UserRole;
+  unreadNotificationsCount?: number;
   onToggleDarkMode: () => void;
   onOpenProfile: () => void;
   onLockApp: () => void;
@@ -31,6 +35,8 @@ interface NavbarProps {
   onOpenPersonalRecords?: () => void;
   onOpenWaterTracker?: () => void;
   onOpenAudioCoach?: () => void;
+  onOpenEnterpriseAuth?: () => void;
+  onOpenNotifications?: () => void;
   lang?: Language;
   onToggleLanguage?: () => void;
 }
@@ -40,6 +46,8 @@ export function Navbar({
   sync,
   membership,
   darkMode,
+  userRole = "Admin",
+  unreadNotificationsCount = 0,
   onToggleDarkMode,
   onOpenProfile,
   onLockApp,
@@ -50,6 +58,8 @@ export function Navbar({
   onOpenPersonalRecords,
   onOpenWaterTracker,
   onOpenAudioCoach,
+  onOpenEnterpriseAuth,
+  onOpenNotifications,
   lang = "en",
   onToggleLanguage,
 }: NavbarProps) {
@@ -73,9 +83,15 @@ export function Navbar({
               <span className="text-base font-extrabold tracking-tight text-slate-100">
                 FitPulse<span className="text-emerald-400">Pro</span>
               </span>
-              <span className="hidden sm:inline-flex items-center rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-400 border border-emerald-500/20">
-                {profile.fitnessGoal}
-              </span>
+              {/* Enterprise RBAC Role Badge */}
+              <button
+                onClick={onOpenEnterpriseAuth}
+                className="hidden sm:inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20 transition-all cursor-pointer"
+                title="Enterprise Role & Cloud Authentication"
+              >
+                <Shield className="w-3 h-3" />
+                <span>{userRole}</span>
+              </button>
             </div>
             <p className="hidden md:block text-[11px] text-slate-400">
               {lang === "mr" ? "लक्ष्य:" : "Target:"} {profile.targetWeightKg} kg • {membership.gymName}
@@ -85,6 +101,22 @@ export function Navbar({
 
         {/* Right Actions */}
         <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+          {/* Notifications Trigger */}
+          {onOpenNotifications && (
+            <button
+              onClick={onOpenNotifications}
+              className="relative flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-emerald-400 hover:border-slate-700 transition cursor-pointer shrink-0"
+              title="Enterprise Notifications"
+            >
+              <Bell className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              {unreadNotificationsCount > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-[9px] font-black text-slate-950">
+                  {unreadNotificationsCount}
+                </span>
+              )}
+            </button>
+          )}
+
           {/* Language Toggle (मराठी / EN) */}
           {onToggleLanguage && (
             <button
@@ -170,17 +202,15 @@ export function Navbar({
             </div>
           )}
 
-          {/* Cloud Sync Trigger */}
-          {onOpenCloudSync && (
-            <button
-              onClick={onOpenCloudSync}
-              className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-[11px] text-slate-300 cursor-pointer transition shrink-0"
-              title={`Cloud Database: ${sync.syncStatus === "synced" ? "Online & Synchronized" : "Local Offline Mode"}. Click to manage.`}
-            >
-              <Cloud className={`h-3.5 w-3.5 ${sync.syncStatus === "synced" ? "text-emerald-400" : "text-amber-400"}`} />
-              <span className="text-[11px] font-medium">{sync.syncStatus === "synced" ? t.cloudSynced : t.cloudOffline}</span>
-            </button>
-          )}
+          {/* Enterprise Auth & Cloud Sync Trigger */}
+          <button
+            onClick={onOpenEnterpriseAuth || onOpenCloudSync}
+            className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-emerald-500/30 text-[11px] text-slate-300 cursor-pointer transition shrink-0"
+            title={`Enterprise Authentication & Sync Status: ${sync.syncStatus}. Click to manage.`}
+          >
+            <Shield className="h-3.5 w-3.5 text-emerald-400" />
+            <span className="text-[11px] font-bold text-emerald-300">Auth / Sync</span>
+          </button>
 
           {/* Security Lock Screen Trigger */}
           <button

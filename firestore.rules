@@ -16,6 +16,7 @@ service cloud.firestore {
              userId == 'default-athlete' ||
              userId == 'guest_athlete' ||
              userId == 'user_local' ||
+             userId == 'usr-admin-01' ||
              userId == 'current-fitness-user';
     }
 
@@ -25,6 +26,17 @@ service cloud.firestore {
       match /{allSubcollections=**} {
         allow read, write: if isOwner(userId) || isPermittedGuest(userId);
       }
+    }
+
+    // System-wide collections
+    match /rateCharts/{chartId} {
+      allow read: if true;
+      allow write: if isAuthenticated() || isPermittedGuest('usr-admin-01');
+    }
+
+    match /auditLogs/{logId} {
+      allow read: if isAuthenticated() || isPermittedGuest('usr-admin-01');
+      allow create: if true;
     }
 
     // Health check and connection test endpoints
@@ -41,4 +53,3 @@ service cloud.firestore {
     }
   }
 }
-
