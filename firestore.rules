@@ -18,8 +18,10 @@ service cloud.firestore {
              userId == 'user_local' ||
              userId == 'usr-admin-01' ||
              userId == 'current-fitness-user' ||
+             userId == 'prathameshmore949@gmail.com' ||
              userId.matches('^usr-.*') ||
-             userId.matches('^phone-.*');
+             userId.matches('^phone-.*') ||
+             userId.matches('^[a-zA-Z0-9_.@-]+$');
     }
 
     function isAuthorized(userId) {

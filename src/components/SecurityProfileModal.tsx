@@ -1,8 +1,9 @@
 import React, { useState } from "react";
-import { X, User, Shield, Cloud, Download, Upload, Check, Smartphone, HeartPulse, Lock, Fingerprint, RefreshCw, Bell, BellOff, Volume2, VolumeX } from "lucide-react";
+import { X, User, Shield, Cloud, Download, Upload, Check, Smartphone, HeartPulse, Lock, Fingerprint, RefreshCw, Bell, BellOff, Volume2, VolumeX, ExternalLink, Database } from "lucide-react";
 import { UserProfile, SecuritySettings, CloudSyncState, FitnessGoal, ActivityLevel, Gender } from "../types";
 import { exportAppStateJSON } from "../services/storageService";
 import { AppState } from "../types";
+import { saveAllDataToFirebaseConsole, FIREBASE_CONSOLE_URL } from "../services/firebase";
 
 interface SecurityProfileModalProps {
   isOpen: boolean;
@@ -71,6 +72,32 @@ export function SecurityProfileModal({
         syncStatus: "synced",
       });
     }, 1200);
+  };
+
+  const [isBulkSaving, setIsBulkSaving] = useState(false);
+  const [bulkSaveFeedback, setBulkSaveFeedback] = useState<string | null>(null);
+
+  const handleSaveAllToConsole = async () => {
+    setIsBulkSaving(true);
+    setBulkSaveFeedback("फायरबेस कन्सोलमध्ये सेव्ह करत आहे...");
+    try {
+      const uid = fullAppState.cloudUser?.uid || fullAppState.currentUserAccount?.uid || "usr-admin-01";
+      const res = await saveAllDataToFirebaseConsole(uid, fullAppState);
+      if (res.success) {
+        onUpdateSync({
+          ...sync,
+          lastSyncDate: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          syncStatus: "synced",
+        });
+        setBulkSaveFeedback(`सर्व ${res.totalRecordsSaved} रेकॉर्ड्स फायरबेस कन्सोलमध्ये सेव्ह झाले!`);
+      } else {
+        setBulkSaveFeedback(res.error || "सेव्ह अयशस्वी. कृपया इंटरनेट तपासा.");
+      }
+    } catch (err: any) {
+      setBulkSaveFeedback(err?.message || "Failed to save to console.");
+    } finally {
+      setIsBulkSaving(false);
+    }
   };
 
   const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -505,6 +532,50 @@ export function SecurityProfileModal({
                 <div className="text-[11px] text-slate-400 flex items-center justify-between pt-1">
                   <span>Last synced: {sync.lastSyncDate}</span>
                   <span className="text-slate-300">Auth: Google / Verified Session</span>
+                </div>
+              </div>
+
+              {/* Firebase Console Direct Bulk Save */}
+              <div className="p-4 rounded-xl bg-gradient-to-br from-emerald-950/40 via-slate-800/80 to-slate-900 border border-emerald-500/40 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Database className="h-4 w-4 text-emerald-400" />
+                    <h4 className="text-xs font-bold text-slate-100">
+                      सेव्ह ऑल डेटा इन फायरबेस कन्सोल (Firebase Console Save)
+                    </h4>
+                  </div>
+                  <a
+                    href={FIREBASE_CONSOLE_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[11px] font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-1"
+                  >
+                    <span>कन्सोल उघडा</span>
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                </div>
+
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  प्रोफाईल, वर्कआउट्स, अटेंडन्स, न्यूट्रिशन, कस्टम फूड्स, रेट चार्ट्स आणि फॉर्म्स सर्व फायरबेस कन्सोलमध्ये थेट सुरक्षित करा.
+                </p>
+
+                {bulkSaveFeedback && (
+                  <div className="text-xs text-emerald-300 bg-emerald-950/60 p-2 rounded-lg border border-emerald-500/30 flex items-center gap-2">
+                    <Check className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                    <span>{bulkSaveFeedback}</span>
+                  </div>
+                )}
+
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    onClick={handleSaveAllToConsole}
+                    disabled={isBulkSaving}
+                    className="w-full sm:w-auto px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 disabled:opacity-50 text-slate-950 text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer shadow-md shadow-emerald-500/20"
+                  >
+                    <Upload className={`h-4 w-4 ${isBulkSaving ? "animate-spin" : ""}`} />
+                    <span>{isBulkSaving ? "कन्सोलमध्ये सेव्ह करत आहे..." : "सेव्ह ऑल डेटा (Save All to Console)"}</span>
+                  </button>
                 </div>
               </div>
 

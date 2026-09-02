@@ -114,6 +114,20 @@
       },
       "required": ["id", "title", "cohortName", "status"]
     },
+    "ActivityRecord": {
+      "title": "ActivityRecord",
+      "description": "User exercise and workout session activity log entry",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "type": { "type": "string" },
+        "durationMinutes": { "type": "number" },
+        "caloriesBurned": { "type": "number" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["id", "title", "type"]
+    },
     "FitnessData": {
       "title": "FitnessData",
       "description": "Complete user fitness state including workouts, nutrition, checklists, attendance, and achievements",
@@ -134,6 +148,10 @@
     "/users/{userId}/account/{docId}": {
       "schema": "UserAccount",
       "description": "User account credentials and role"
+    },
+    "/users/{userId}/activityLogs/{logId}": {
+      "schema": "ActivityRecord",
+      "description": "Individual exercise and workout logs"
     },
     "/users/{userId}/fitnessData/{docId}": {
       "schema": "FitnessData",

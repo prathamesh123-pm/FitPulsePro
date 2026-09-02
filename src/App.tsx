@@ -33,6 +33,7 @@ import {
   subscribeToCloudChanges,
   fetchUserAccountFromCloud,
   subscribeToAnnouncements,
+  saveAllDataToFirebaseConsole,
 } from "./services/firebase";
 import { doc, getDocFromServer } from "firebase/firestore";
 
@@ -239,9 +240,9 @@ export default function App() {
       }
     });
 
-    // 2. Connection verification test per Firebase integration instructions
+    // 2. Connection verification test and initial console synchronization
     if (db && navigator.onLine) {
-      const testConnection = async () => {
+      const testConnectionAndSync = async () => {
         try {
           await getDocFromServer(doc(db, "test", "connection"));
         } catch (error: any) {
@@ -249,8 +250,24 @@ export default function App() {
             console.info("Firestore operating in offline mode.");
           }
         }
+
+        // Ensure all local state data is synced to Firebase Console
+        try {
+          const uid = appState.cloudUser?.uid || auth?.currentUser?.uid || "usr-admin-01";
+          await saveAllDataToFirebaseConsole(uid, appState);
+          setAppState((prev) => ({
+            ...prev,
+            sync: {
+              ...prev.sync,
+              syncStatus: "synced",
+              lastSyncDate: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            },
+          }));
+        } catch (syncErr) {
+          console.warn("Initial Firebase Console auto-save notice:", syncErr);
+        }
       };
-      testConnection();
+      testConnectionAndSync();
     }
 
     // 3. Online/offline listener

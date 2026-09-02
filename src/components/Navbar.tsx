@@ -224,6 +224,19 @@ export function Navbar({
             </div>
           )}
 
+          {/* Direct Firebase Console Sync Button */}
+          {onOpenCloudSync && (
+            <button
+              onClick={onOpenCloudSync}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-emerald-950/50 hover:bg-emerald-900/60 border border-emerald-500/50 text-[11px] text-emerald-300 font-bold cursor-pointer transition shrink-0 shadow-sm"
+              title="Save All Data to Firebase Console / फायरबेस कन्सोलमध्ये सर्व डेटा सेव्ह करा"
+            >
+              <Cloud className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+              <span className="hidden sm:inline">फायरबेस कन्सोल</span>
+              <span className="sm:hidden">कन्सोल</span>
+            </button>
+          )}
+
           {/* Enterprise Auth & Cloud Sync Trigger */}
           <button
             onClick={onOpenEnterpriseAuth || onOpenCloudSync}

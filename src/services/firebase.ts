@@ -13,6 +13,7 @@ import {
   query,
   orderBy,
   limit,
+  writeBatch,
 } from "firebase/firestore";
 import {
   getAuth,
@@ -1357,3 +1358,392 @@ export function subscribeToCloudChanges(
     return () => {};
   }
 }
+
+// ==========================================
+// 11. BULK SAVE ALL DATA TO FIREBASE CONSOLE
+// ==========================================
+
+export interface SaveAllDataResult {
+  success: boolean;
+  error?: string;
+  totalRecordsSaved: number;
+  syncedBreakdown: {
+    currentState: boolean;
+    profile: boolean;
+    membership: boolean;
+    goals: boolean;
+    activities: number;
+    dailyRoutines: number;
+    attendance: number;
+    workoutHistory: number;
+    customFoods: number;
+    rateCharts: number;
+    forms: number;
+    groupReports: number;
+    auditLogs: number;
+    allUsersIndex: boolean;
+  };
+  databaseId: string;
+  projectId: string;
+  consoleUrl: string;
+  timestamp: string;
+}
+
+export const FIREBASE_CONSOLE_URL =
+  firebaseConfig && firebaseConfig.projectId && firebaseConfig.firestoreDatabaseId
+    ? `https://console.firebase.google.com/project/${firebaseConfig.projectId}/firestore/databases/${firebaseConfig.firestoreDatabaseId}/data`
+    : `https://console.firebase.google.com/`;
+
+/**
+ * Save ALL fitness data across all collections into Firebase Firestore Console.
+ * Populates individual Firestore documents & collections for easy browsing in the Firebase Console:
+ * - users/{userId}/fitnessData/currentState (full state JSON backup)
+ * - users/{userId}/fitnessData/profile
+ * - users/{userId}/fitnessData/membership
+ * - users/{userId}/fitnessData/goals
+ * - users/{userId}/fitnessData/metricsSummary
+ * - users/{userId}/activityLogs/{id}
+ * - users/{userId}/dailyRoutines/{id}
+ * - users/{userId}/attendance/{id}
+ * - users/{userId}/workoutHistory/{id}
+ * - users/{userId}/customFoods/{id}
+ * - users/{userId}/rateCharts/{id}
+ * - users/{userId}/forms/{id}
+ * - users/{userId}/groupReports/{id}
+ * - users/{userId}/auditLogs/{id}
+ * - allUsers/{userId} (root directory entry)
+ */
+export async function saveAllDataToFirebaseConsole(
+  userId: string,
+  state: AppState,
+  onProgress?: (stageName: string, progressPercent: number) => void
+): Promise<SaveAllDataResult> {
+  const result: SaveAllDataResult = {
+    success: false,
+    totalRecordsSaved: 0,
+    syncedBreakdown: {
+      currentState: false,
+      profile: false,
+      membership: false,
+      goals: false,
+      activities: 0,
+      dailyRoutines: 0,
+      attendance: 0,
+      workoutHistory: 0,
+      customFoods: 0,
+      rateCharts: 0,
+      forms: 0,
+      groupReports: 0,
+      auditLogs: 0,
+      allUsersIndex: false,
+    },
+    databaseId: firebaseConfig?.firestoreDatabaseId || "default",
+    projectId: firebaseConfig?.projectId || "",
+    consoleUrl: FIREBASE_CONSOLE_URL,
+    timestamp: new Date().toISOString(),
+  };
+
+  if (!db) {
+    result.error = "Firebase Cloud Firestore is not initialized.";
+    return result;
+  }
+
+  if (typeof navigator !== "undefined" && !navigator.onLine) {
+    result.error = "Offline: Please connect to the internet to save data to Firebase Console.";
+    return result;
+  }
+
+  const effectiveUserId = resolveUserId(userId);
+  if (!effectiveUserId) {
+    result.error = "Invalid User ID for Firebase Console save.";
+    return result;
+  }
+
+  try {
+    onProgress?.("1/6: मास्टर स्नॅपशॉट (Master Snapshot) सेव्ह करत आहे...", 15);
+
+    // 1. Master currentState document
+    const cleanState = sanitizeForFirestore(state);
+    const currentStateRef = doc(db, "users", effectiveUserId, "fitnessData", "currentState");
+    await setDoc(
+      currentStateRef,
+      {
+        userId: effectiveUserId,
+        lastUpdated: new Date().toISOString(),
+        timestamp: serverTimestamp(),
+        appState: cleanState,
+        schemaVersion: "2.5.0",
+        appName: "FitPulse Pro Enterprise",
+      },
+      { merge: true }
+    );
+    result.syncedBreakdown.currentState = true;
+    result.totalRecordsSaved += 1;
+
+    onProgress?.("2/6: प्रोफाईल, गोल्स आणि मेंबरशिप (Profile & Membership) सेव्ह करत आहे...", 30);
+
+    // 2. Structured profile, membership, goals, summary
+    if (state.profile) {
+      const profileRef = doc(db, "users", effectiveUserId, "fitnessData", "profile");
+      await setDoc(
+        profileRef,
+        {
+          ...sanitizeForFirestore(state.profile),
+          userId: effectiveUserId,
+          lastUpdated: new Date().toISOString(),
+          timestamp: serverTimestamp(),
+        },
+        { merge: true }
+      );
+      result.syncedBreakdown.profile = true;
+      result.totalRecordsSaved += 1;
+    }
+
+    if (state.membership) {
+      const membershipRef = doc(db, "users", effectiveUserId, "fitnessData", "membership");
+      await setDoc(
+        membershipRef,
+        {
+          ...sanitizeForFirestore(state.membership),
+          userId: effectiveUserId,
+          lastUpdated: new Date().toISOString(),
+          timestamp: serverTimestamp(),
+        },
+        { merge: true }
+      );
+      result.syncedBreakdown.membership = true;
+      result.totalRecordsSaved += 1;
+    }
+
+    if (state.fitnessGoals) {
+      const goalsRef = doc(db, "users", effectiveUserId, "fitnessData", "goals");
+      await setDoc(
+        goalsRef,
+        {
+          ...sanitizeForFirestore(state.fitnessGoals),
+          userId: effectiveUserId,
+          lastUpdated: new Date().toISOString(),
+          timestamp: serverTimestamp(),
+        },
+        { merge: true }
+      );
+      result.syncedBreakdown.goals = true;
+      result.totalRecordsSaved += 1;
+    }
+
+    // Key metrics summary document
+    const summaryRef = doc(db, "users", effectiveUserId, "fitnessData", "metricsSummary");
+    await setDoc(
+      summaryRef,
+      {
+        userId: effectiveUserId,
+        totalActivities: state.activityLogs?.length || 0,
+        totalAttendanceDays: Object.keys(state.attendance || {}).length,
+        totalWorkouts: state.workoutHistory?.length || 0,
+        totalCustomFoods: state.customFoods?.length || 0,
+        totalRateCharts: state.rateCharts?.length || 0,
+        totalForms: state.forms?.length || 0,
+        totalGroupReports: state.groupReports?.length || 0,
+        totalAuditLogs: state.auditLogs?.length || 0,
+        lastBackupAt: new Date().toISOString(),
+        timestamp: serverTimestamp(),
+      },
+      { merge: true }
+    );
+    result.totalRecordsSaved += 1;
+
+    onProgress?.("3/6: ॲक्टिव्हिटी आणि वर्कआउट इतिहास (Activities & Workouts) सेव्ह करत आहे...", 50);
+
+    // 3. Activity Logs subcollection
+    if (state.activityLogs && state.activityLogs.length > 0) {
+      for (const act of state.activityLogs) {
+        const actId = act.id || `act-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+        const actRef = doc(db, "users", effectiveUserId, "activityLogs", actId);
+        await setDoc(
+          actRef,
+          {
+            ...sanitizeForFirestore(act),
+            userId: effectiveUserId,
+            timestamp: act.date || new Date().toISOString(),
+          },
+          { merge: true }
+        );
+        result.syncedBreakdown.activities += 1;
+        result.totalRecordsSaved += 1;
+      }
+    }
+
+    // Workout history
+    if (state.workoutHistory && state.workoutHistory.length > 0) {
+      for (const w of state.workoutHistory) {
+        const wId = w.id || `workout-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+        const wRef = doc(db, "users", effectiveUserId, "workoutHistory", wId);
+        await setDoc(
+          wRef,
+          {
+            ...sanitizeForFirestore(w),
+            userId: effectiveUserId,
+            updatedAt: new Date().toISOString(),
+          },
+          { merge: true }
+        );
+        result.syncedBreakdown.workoutHistory += 1;
+        result.totalRecordsSaved += 1;
+      }
+    }
+
+    onProgress?.("4/6: अटेंडन्स आणि डेली रुटीन (Attendance & Routines) सेव्ह करत आहे...", 70);
+
+    // 4. Attendance records
+    if (state.attendance) {
+      const attendanceEntries = Object.entries(state.attendance);
+      for (const [dateKey, record] of attendanceEntries) {
+        const attRef = doc(db, "users", effectiveUserId, "attendance", dateKey);
+        await setDoc(
+          attRef,
+          {
+            ...sanitizeForFirestore(record),
+            dateKey,
+            userId: effectiveUserId,
+            savedAt: new Date().toISOString(),
+          },
+          { merge: true }
+        );
+        result.syncedBreakdown.attendance += 1;
+        result.totalRecordsSaved += 1;
+      }
+    }
+
+    // Daily Routines
+    if (state.dailyRoutines) {
+      const routineEntries = Object.entries(state.dailyRoutines);
+      for (const [dateKey, routine] of routineEntries) {
+        const routineRef = doc(db, "users", effectiveUserId, "dailyRoutines", dateKey);
+        await setDoc(
+          routineRef,
+          {
+            ...sanitizeForFirestore(routine),
+            dateKey,
+            userId: effectiveUserId,
+            savedAt: new Date().toISOString(),
+          },
+          { merge: true }
+        );
+        result.syncedBreakdown.dailyRoutines += 1;
+        result.totalRecordsSaved += 1;
+      }
+    }
+
+    onProgress?.("5/6: डाएट, फॉर्म्स आणि रिपोर्ट्स (Diet, Forms & Reports) सेव्ह करत आहे...", 85);
+
+    // 5. Custom Foods
+    if (state.customFoods && state.customFoods.length > 0) {
+      for (const food of state.customFoods) {
+        const foodId = food.id || `food-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+        const foodRef = doc(db, "users", effectiveUserId, "customFoods", foodId);
+        await setDoc(
+          foodRef,
+          {
+            ...sanitizeForFirestore(food),
+            userId: effectiveUserId,
+          },
+          { merge: true }
+        );
+        result.syncedBreakdown.customFoods += 1;
+        result.totalRecordsSaved += 1;
+      }
+    }
+
+    // Rate Charts (both under user and global)
+    if (state.rateCharts && state.rateCharts.length > 0) {
+      for (const chart of state.rateCharts) {
+        const chartId = chart.id || `chart-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+        const chartRef = doc(db, "users", effectiveUserId, "rateCharts", chartId);
+        await setDoc(chartRef, sanitizeForFirestore(chart), { merge: true });
+        
+        // Also ensure global rateCharts has it
+        try {
+          const globalChartRef = doc(db, "rateCharts", chartId);
+          await setDoc(globalChartRef, sanitizeForFirestore(chart), { merge: true });
+        } catch {}
+
+        result.syncedBreakdown.rateCharts += 1;
+        result.totalRecordsSaved += 1;
+      }
+    }
+
+    // Forms
+    if (state.forms && state.forms.length > 0) {
+      for (const form of state.forms) {
+        const formId = form.id || `form-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+        const formRef = doc(db, "users", effectiveUserId, "forms", formId);
+        await setDoc(formRef, sanitizeForFirestore(form), { merge: true });
+        result.syncedBreakdown.forms += 1;
+        result.totalRecordsSaved += 1;
+      }
+    }
+
+    // Group Reports
+    if (state.groupReports && state.groupReports.length > 0) {
+      for (const rep of state.groupReports) {
+        const repId = rep.id || `rep-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+        const repRef = doc(db, "users", effectiveUserId, "groupReports", repId);
+        await setDoc(repRef, sanitizeForFirestore(rep), { merge: true });
+        result.syncedBreakdown.groupReports += 1;
+        result.totalRecordsSaved += 1;
+      }
+    }
+
+    // Audit Logs
+    if (state.auditLogs && state.auditLogs.length > 0) {
+      const recentLogs = state.auditLogs.slice(0, 50);
+      for (const logItem of recentLogs) {
+        const logId = logItem.id || `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+        const logRef = doc(db, "users", effectiveUserId, "auditLogs", logId);
+        await setDoc(logRef, sanitizeForFirestore(logItem), { merge: true });
+        result.syncedBreakdown.auditLogs += 1;
+        result.totalRecordsSaved += 1;
+      }
+    }
+
+    onProgress?.("6/6: युजर डिरेक्टरी इंडेक्स (allUsers Index) अपडेट करत आहे...", 95);
+
+    // 6. Root Directory allUsers document
+    try {
+      const allUsersRef = doc(db, "allUsers", effectiveUserId);
+      await setDoc(
+        allUsersRef,
+        {
+          uid: effectiveUserId,
+          displayName: state.profile?.fullName || state.currentUserAccount?.displayName || "Athlete",
+          email: state.profile?.email || state.currentUserAccount?.email || "user@fitpulse.app",
+          role: state.currentUserAccount?.role || "Admin",
+          fitnessGoal: state.profile?.fitnessGoal || "General Fitness",
+          currentWeightKg: state.profile?.currentWeightKg || null,
+          totalWorkouts: state.workoutHistory?.length || 0,
+          totalActivities: state.activityLogs?.length || 0,
+          membershipTier: state.membership?.membershipType || "Standard",
+          lastSyncAt: new Date().toISOString(),
+          timestamp: serverTimestamp(),
+        },
+        { merge: true }
+      );
+      result.syncedBreakdown.allUsersIndex = true;
+      result.totalRecordsSaved += 1;
+    } catch (idxErr) {
+      console.warn("Notice: allUsers index update skipped:", idxErr);
+    }
+
+    onProgress?.("यशस्वी! सर्व डेटा फायरबेस कन्सोलमध्ये सेव्ह झाला आहे!", 100);
+    result.success = true;
+    return result;
+  } catch (err: any) {
+    console.error("Failed to save all data to Firebase Console:", err);
+    if (err?.code === "permission-denied" || err?.message?.includes("Missing or insufficient permissions")) {
+      handleFirestoreError(err, OperationType.WRITE, `users/${effectiveUserId}`);
+    }
+    result.error = err?.message || "सर्व डेटा सेव्ह करताना त्रुटी आली.";
+    return result;
+  }
+}
+
