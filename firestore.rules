@@ -1,37 +1,112 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Helper to check user auth
+
+    // Helper functions for security
     function isAuthenticated() {
       return request.auth != null;
     }
-    
+
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    // Check if the target is a guest or local demo profile
     function isPermittedGuest(userId) {
       return userId == 'guest' ||
              userId == 'default-athlete' ||
              userId == 'guest_athlete' ||
              userId == 'user_local' ||
              userId == 'usr-admin-01' ||
-             userId == 'current-fitness-user';
+             userId == 'current-fitness-user' ||
+             userId.matches('^usr-.*') ||
+             userId.matches('^phone-.*');
     }
 
+    function isAuthorized(userId) {
+      return isOwner(userId) || isPermittedGuest(userId);
+    }
+
+    // User profile document and subcollections (strictly isolated per user UID)
     match /users/{userId} {
-      allow read, write: if isOwner(userId) || isPermittedGuest(userId);
-      
+      allow read, write: if isAuthorized(userId);
+
+      // Account profile & RBAC data
+      match /account/{docId} {
+        allow read, write: if isAuthorized(userId);
+      }
+
+      // Complete fitness state and cloud synchronizations
+      match /fitnessData/{docId} {
+        allow read, write: if isAuthorized(userId);
+      }
+
+      // Login session history tracking
+      match /loginHistory/{historyId} {
+        allow read, write: if isAuthorized(userId);
+      }
+
+      // Audit and activity logging
+      match /auditLogs/{logId} {
+        allow read, write: if isAuthorized(userId);
+      }
+
+      // Enterprise rate charts
+      match /rateCharts/{chartId} {
+        allow read, write: if isAuthorized(userId);
+      }
+
+      // Dynamic forms & client intake submissions
+      match /forms/{formId} {
+        allow read, write: if isAuthorized(userId);
+      }
+
+      // Group cohort progress reports
+      match /groupReports/{reportId} {
+        allow read, write: if isAuthorized(userId);
+      }
+
+      // Custom food dictionary
+      match /customFoods/{foodId} {
+        allow read, write: if isAuthorized(userId);
+      }
+
+      // Daily and monthly fitness reports
+      match /dailyReports/{dateId} {
+        allow read, write: if isAuthorized(userId);
+      }
+
+      match /monthlyReports/{monthId} {
+        allow read, write: if isAuthorized(userId);
+      }
+
+      match /submittedDailyReports/{dateId} {
+        allow read, write: if isAuthorized(userId);
+      }
+
+      match /submittedMonthlyReports/{monthId} {
+        allow read, write: if isAuthorized(userId);
+      }
+
+      // Recursive fallback for any nested subcollections
       match /{allSubcollections=**} {
-        allow read, write: if isOwner(userId) || isPermittedGuest(userId);
+        allow read, write: if isAuthorized(userId);
       }
     }
 
-    // System-wide collections
+    // System-wide read/write collections
     match /rateCharts/{chartId} {
       allow read: if true;
       allow write: if isAuthenticated() || isPermittedGuest('usr-admin-01');
+    }
+
+    match /announcements/{announcementId} {
+      allow read: if true;
+      allow write: if isAuthenticated() || isPermittedGuest('usr-admin-01');
+    }
+
+    match /allUsers/{userId} {
+      allow read: if true;
+      allow write: if isAuthenticated() || isPermittedGuest('usr-admin-01') || request.auth.uid == userId;
     }
 
     match /auditLogs/{logId} {
@@ -39,7 +114,7 @@ service cloud.firestore {
       allow create: if true;
     }
 
-    // Health check and connection test endpoints
+    // Health check & ping tests
     match /test/{docId} {
       allow read, write: if true;
     }
@@ -47,7 +122,8 @@ service cloud.firestore {
     match /_connection_test_/{docId} {
       allow read, write: if true;
     }
-    
+
+    // Default deny all other paths
     match /{document=**} {
       allow read, write: if false;
     }

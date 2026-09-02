@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { X, User, Shield, Cloud, Download, Upload, Check, Smartphone, HeartPulse, Lock, Fingerprint, RefreshCw } from "lucide-react";
+import { X, User, Shield, Cloud, Download, Upload, Check, Smartphone, HeartPulse, Lock, Fingerprint, RefreshCw, Bell, BellOff, Volume2, VolumeX } from "lucide-react";
 import { UserProfile, SecuritySettings, CloudSyncState, FitnessGoal, ActivityLevel, Gender } from "../types";
 import { exportAppStateJSON } from "../services/storageService";
 import { AppState } from "../types";
@@ -11,6 +11,8 @@ interface SecurityProfileModalProps {
   security: SecuritySettings;
   sync: CloudSyncState;
   fullAppState: AppState;
+  notificationsEnabled?: boolean;
+  onToggleNotificationsEnabled?: () => void;
   onUpdateProfile: (updated: UserProfile) => void;
   onUpdateSecurity: (updated: SecuritySettings) => void;
   onUpdateSync: (updated: CloudSyncState) => void;
@@ -24,12 +26,14 @@ export function SecurityProfileModal({
   security,
   sync,
   fullAppState,
+  notificationsEnabled = false,
+  onToggleNotificationsEnabled,
   onUpdateProfile,
   onUpdateSecurity,
   onUpdateSync,
   onRestoreAppState,
 }: SecurityProfileModalProps) {
-  const [activeTab, setActiveTab] = useState<"profile" | "security" | "cloud">("profile");
+  const [activeTab, setActiveTab] = useState<"profile" | "security" | "cloud" | "notifications">("profile");
   const [formProfile, setFormProfile] = useState<UserProfile>({ ...profile });
   const [pinCode, setPinCode] = useState(security.pinCode || "1234");
   const [pinEnabled, setPinEnabled] = useState(security.pinEnabled);
@@ -151,6 +155,30 @@ export function SecurityProfileModal({
           >
             <Cloud className="h-3.5 w-3.5" />
             Cloud Backup
+          </button>
+          <button
+            onClick={() => setActiveTab("notifications")}
+            className={`pb-2.5 text-xs font-semibold flex items-center gap-1.5 border-b-2 transition cursor-pointer whitespace-nowrap ${
+              activeTab === "notifications"
+                ? "border-emerald-500 text-emerald-400 font-bold"
+                : "border-transparent text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            {notificationsEnabled ? (
+              <Bell className="h-3.5 w-3.5 text-emerald-400" />
+            ) : (
+              <BellOff className="h-3.5 w-3.5 text-rose-400" />
+            )}
+            Notifications
+            <span
+              className={`text-[9px] px-1.5 py-0.2 rounded-full font-bold ${
+                notificationsEnabled
+                  ? "bg-emerald-500/20 text-emerald-400"
+                  : "bg-rose-500/20 text-rose-300"
+              }`}
+            >
+              {notificationsEnabled ? "ON" : "OFF"}
+            </span>
           </button>
         </div>
 
@@ -500,6 +528,123 @@ export function SecurityProfileModal({
                     Restore Backup File
                     <input type="file" accept=".json" onChange={handleImportFile} className="hidden" />
                   </label>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "notifications" && (
+            <div className="space-y-4">
+              {/* Notification Master Status Card */}
+              <div
+                className={`p-5 rounded-2xl border transition-all ${
+                  notificationsEnabled
+                    ? "bg-slate-800/60 border-emerald-500/30"
+                    : "bg-slate-800/60 border-rose-500/30"
+                }`}
+              >
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex items-start gap-3">
+                    <div
+                      className={`p-3 rounded-xl ${
+                        notificationsEnabled
+                          ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                          : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                      }`}
+                    >
+                      {notificationsEnabled ? (
+                        <Volume2 className="h-6 w-6" />
+                      ) : (
+                        <VolumeX className="h-6 w-6" />
+                      )}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-sm font-bold text-slate-100">
+                          {notificationsEnabled
+                            ? "Notifications & Alerts: Active"
+                            : "Notifications & Alerts: OFF (Muted)"}
+                        </h4>
+                        <span
+                          className={`text-[10px] px-2 py-0.5 rounded-full font-extrabold ${
+                            notificationsEnabled
+                              ? "bg-emerald-500/20 text-emerald-300"
+                              : "bg-rose-500/20 text-rose-300"
+                          }`}
+                        >
+                          {notificationsEnabled ? "ACTIVE" : "MUTED"}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                        {notificationsEnabled
+                          ? "Real-time toast notifications, workout feedback, hydration prompts, and alert popups are active."
+                          : "All floating toast alerts, system notifications, and sound badges are currently silenced and turned OFF."}
+                      </p>
+                    </div>
+                  </div>
+
+                  {onToggleNotificationsEnabled && (
+                    <button
+                      type="button"
+                      onClick={onToggleNotificationsEnabled}
+                      className={`px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shrink-0 cursor-pointer shadow-lg ${
+                        notificationsEnabled
+                          ? "bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30"
+                          : "bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-500/20"
+                      }`}
+                    >
+                      {notificationsEnabled ? (
+                        <>
+                          <BellOff className="h-4 w-4 text-rose-400" />
+                          <span>Turn Notifications OFF</span>
+                        </>
+                      ) : (
+                        <>
+                          <Bell className="h-4 w-4 text-slate-950" />
+                          <span>Turn Notifications ON</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Status checklist */}
+              <div className="p-4 rounded-xl bg-slate-800/40 border border-slate-700/60 space-y-2 text-xs">
+                <h5 className="font-semibold text-slate-300">Notification Channels:</h5>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-slate-400">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`h-2 w-2 rounded-full ${
+                        notificationsEnabled ? "bg-emerald-400" : "bg-rose-400"
+                      }`}
+                    />
+                    <span>Real-time floating toasts: {notificationsEnabled ? "Enabled" : "Off"}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`h-2 w-2 rounded-full ${
+                        notificationsEnabled ? "bg-emerald-400" : "bg-rose-400"
+                      }`}
+                    />
+                    <span>Audit & System alerts: {notificationsEnabled ? "Enabled" : "Off"}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`h-2 w-2 rounded-full ${
+                        notificationsEnabled ? "bg-emerald-400" : "bg-rose-400"
+                      }`}
+                    />
+                    <span>Workout & PR badges: {notificationsEnabled ? "Enabled" : "Off"}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`h-2 w-2 rounded-full ${
+                        notificationsEnabled ? "bg-emerald-400" : "bg-rose-400"
+                      }`}
+                    />
+                    <span>Sound alerts: {notificationsEnabled ? "Enabled" : "Off"}</span>
+                  </div>
                 </div>
               </div>
             </div>

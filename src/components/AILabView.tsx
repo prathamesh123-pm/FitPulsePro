@@ -137,7 +137,16 @@ export function AILabView({ profile, healthMetrics }: AILabViewProps) {
         }),
       });
       const data = await res.json();
-      setWorkoutGenResult(data.plan);
+      const plan = data.plan || data;
+      setWorkoutGenResult({
+        planTitle: plan.planTitle || plan.planName || "AI Periodized Split",
+        overview: plan.overview || plan.summary || "Structured hypertrophy and strength split.",
+        days: (plan.days || []).map((d: any) => ({
+          dayName: d.dayName || d.day || "Workout Day",
+          focus: d.focus || d.day || "Main Lift Focus",
+          exercises: d.exercises || [],
+        })),
+      });
     } catch (err) {
       console.error(err);
     } finally {
@@ -156,12 +165,27 @@ export function AILabView({ profile, healthMetrics }: AILabViewProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           goal: dietGoal,
-          calories: healthMetrics.dailyCaloriesRequired,
-          preference: dietPref,
+          targetCalories: healthMetrics.dailyCaloriesRequired,
+          dietaryPreference: dietPref,
         }),
       });
       const data = await res.json();
-      setDietGenResult(data.plan);
+      const plan = data.plan || data;
+      setDietGenResult({
+        planTitle: plan.planTitle || plan.planName || `${dietGoal} Nutrition Blueprint`,
+        caloriesTarget: plan.caloriesTarget || plan.targetCalories || healthMetrics.dailyCaloriesRequired,
+        macros: {
+          protein: typeof plan.macros?.protein === "string" ? plan.macros.protein.replace(/[^0-9]/g, "") || "160" : plan.macros?.protein || `${healthMetrics.dailyProteinGrams}`,
+          carbs: typeof plan.macros?.carbs === "string" ? plan.macros.carbs.replace(/[^0-9]/g, "") || "220" : plan.macros?.carbs || `${healthMetrics.dailyCarbsGrams}`,
+          fat: typeof plan.macros?.fat === "string" ? plan.macros.fat.replace(/[^0-9]/g, "") || "70" : plan.macros?.fat || `${healthMetrics.dailyFatGrams}`,
+        },
+        meals: (plan.meals || []).map((m: any) => ({
+          mealName: m.mealName || m.name || "Scheduled Meal",
+          calories: m.calories || 400,
+          items: m.items || m.food || "Balanced whole foods portion",
+        })),
+        groceryList: plan.groceryList || ["Chicken breast", "Eggs", "Oats", "Greek yogurt", "Vegetables", "Rice"],
+      });
     } catch (err) {
       console.error(err);
     } finally {

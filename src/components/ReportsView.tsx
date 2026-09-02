@@ -87,6 +87,8 @@ export type ReportSubTab =
 interface ReportsViewProps {
   appState: AppState;
   healthMetrics: HealthCalculations;
+  onUpdateState?: (updater: (prev: AppState) => AppState) => void;
+  onNotify?: (title: string, message: string, type: "success" | "info" | "warning" | "error") => void;
   onUpdateActivityLogs?: (logs: any[]) => void;
   onUpdateDailyRoutine?: (date: string, routine: any) => void;
   onSubmitDailyReport?: (date: string, submission: SubmittedDailyReport) => Promise<boolean>;
@@ -101,6 +103,8 @@ interface ReportsViewProps {
 export function ReportsView({
   appState,
   healthMetrics,
+  onUpdateState,
+  onNotify,
   onUpdateActivityLogs,
   onUpdateDailyRoutine,
   onSubmitDailyReport,
@@ -112,7 +116,9 @@ export function ReportsView({
   onUpdateNutritionLog,
 }: ReportsViewProps) {
   const [activeSubTab, setActiveSubTab] = useState<ReportSubTab>("daily");
-  const [selectedDate, setSelectedDate] = useState<string>("2026-08-28");
+  const realToday = new Date().toISOString().split("T")[0];
+  const initialDate = appState.dailyNutrition[realToday] ? realToday : (appState.dailyNutrition["2026-08-28"] ? "2026-08-28" : realToday);
+  const [selectedDate, setSelectedDate] = useState<string>(initialDate);
   const [selectedCalendarDay, setSelectedCalendarDay] = useState<MonthlyDayClassification | null>(null);
   const [mistakeFilterSeverity, setMistakeFilterSeverity] = useState<"all" | "High" | "Medium" | "Low">("all");
   const [isSavingToFirebase, setIsSavingToFirebase] = useState(false);
@@ -402,8 +408,17 @@ export function ReportsView({
       {activeSubTab === "activity" && (
         <div className="space-y-6">
           <ActivityTrackerView
-            activityLogs={appState.activityLogs || []}
-            onUpdateActivityLogs={onUpdateActivityLogs}
+            state={appState}
+            onUpdateState={
+              onUpdateState ||
+              ((updater) => {
+                if (onUpdateActivityLogs) {
+                  const next = updater(appState);
+                  onUpdateActivityLogs(next.activityLogs || []);
+                }
+              })
+            }
+            onNotify={onNotify || (() => {})}
           />
         </div>
       )}

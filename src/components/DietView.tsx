@@ -98,7 +98,8 @@ export function DietView({
   userId = "user_local",
   isWorkoutCompletedToday = false,
 }: DietViewProps) {
-  const currentDate = "2026-08-28";
+  const realToday = new Date().toISOString().split("T")[0];
+  const currentDate = dailyNutrition[realToday] ? realToday : (dailyNutrition["2026-08-28"] ? "2026-08-28" : realToday);
   const [selectedDate, setSelectedDate] = useState(currentDate);
   const [activeDietSubTab, setActiveDietSubTab] = useState<
     "meals" | "checklist" | "calorieReport" | "aiAnalysis" | "savedPlans"

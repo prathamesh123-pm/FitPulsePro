@@ -38,13 +38,14 @@ app.get("/api/health", (_req, res) => {
 
 // AI Fitness Coach Chat
 app.post("/api/ai/coach", async (req, res) => {
-  const { message, userContext, history } = req.body;
+  const { userContext, history } = req.body;
+  const message = req.body.message || req.body.prompt || "Hello Coach, give me an assessment of my fitness goals.";
   const ai = getAIClient();
 
   if (!ai) {
     // Algorithmic high-quality fallback if no API key is set yet
     return res.json({
-      reply: `[Coach Note] Great question regarding "${message || "your training"}". Based on your current profile (${userContext?.goal || "fitness"} goal, ${userContext?.weight || 75}kg), maintain a consistent progressive overload with 1.8-2.2g of protein per kg of bodyweight, prioritize 7-8 hours of deep sleep, and ensure adequate hydration (3-4 liters daily). For detailed personalized workout plans and diet adjustments, you can also use the AI Workout Planner & Diet tabs above!`,
+      reply: `[Coach Note] Great question regarding "${message}". Based on your current profile (${userContext?.goal || userContext?.fitnessGoal || "fitness"} goal, ${userContext?.weight || userContext?.currentWeight || 75}kg), maintain a consistent progressive overload with 1.8-2.2g of protein per kg of bodyweight, prioritize 7-8 hours of deep sleep, and ensure adequate hydration (3-4 liters daily). For detailed personalized workout plans and diet adjustments, you can also use the AI Workout Planner & Diet tabs above!`,
       source: "algorithmic_coach",
     });
   }

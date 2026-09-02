@@ -2,6 +2,7 @@ import React from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Bell,
+  BellOff,
   CheckCircle2,
   AlertCircle,
   Info,
@@ -10,18 +11,25 @@ import {
   Clock,
   Sparkles,
   Layers,
+  VolumeX,
+  Volume2,
 } from "lucide-react";
 import { AppNotification } from "../types";
 
 interface ToastNotificationProps {
   notifications: AppNotification[];
   onDismiss: (id: string) => void;
+  notificationsEnabled?: boolean;
 }
 
 export const ToastNotificationContainer: React.FC<ToastNotificationProps> = ({
   notifications,
   onDismiss,
+  notificationsEnabled = true,
 }) => {
+  // If notifications are turned off by user, do not render floating toast popups
+  if (!notificationsEnabled) return null;
+
   // Show last 3 unread toast notifications floating at top-right
   const activeToasts = notifications.slice(0, 3);
 
@@ -78,6 +86,8 @@ interface NotificationDrawerProps {
   notifications: AppNotification[];
   onClearAll: () => void;
   onDismiss: (id: string) => void;
+  notificationsEnabled?: boolean;
+  onToggleNotificationsEnabled?: () => void;
 }
 
 export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
@@ -86,6 +96,8 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
   notifications,
   onClearAll,
   onDismiss,
+  notificationsEnabled = false,
+  onToggleNotificationsEnabled,
 }) => {
   if (!isOpen) return null;
 
@@ -100,19 +112,35 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
         {/* Header */}
         <div className="p-5 border-b border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Bell className="w-5 h-5 text-emerald-400" />
-            <h3 className="text-sm font-bold text-white">Enterprise Activity Alerts</h3>
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold">
-              {notifications.length}
-            </span>
+            {notificationsEnabled ? (
+              <Bell className="w-5 h-5 text-emerald-400" />
+            ) : (
+              <BellOff className="w-5 h-5 text-rose-400" />
+            )}
+            <div>
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                Enterprise Activity Alerts
+                <span
+                  className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                    notificationsEnabled
+                      ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                      : "bg-rose-500/20 text-rose-300 border border-rose-500/30"
+                  }`}
+                >
+                  {notificationsEnabled ? "ON" : "OFF"}
+                </span>
+              </h3>
+            </div>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={onClearAll}
-              className="text-[11px] text-slate-400 hover:text-rose-400 font-medium transition-colors"
-            >
-              Clear All
-            </button>
+            {notifications.length > 0 && (
+              <button
+                onClick={onClearAll}
+                className="text-[11px] text-slate-400 hover:text-rose-400 font-medium transition-colors"
+              >
+                Clear All
+              </button>
+            )}
             <button
               onClick={onClose}
               className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800"
@@ -122,11 +150,70 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
           </div>
         </div>
 
+        {/* Master ON/OFF Banner */}
+        <div className="px-5 py-3.5 bg-slate-950/60 border-b border-slate-800 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div
+              className={`p-2 rounded-xl ${
+                notificationsEnabled
+                  ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                  : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+              }`}
+            >
+              {notificationsEnabled ? (
+                <Volume2 className="h-4 w-4" />
+              ) : (
+                <VolumeX className="h-4 w-4" />
+              )}
+            </div>
+            <div>
+              <p className="text-xs font-bold text-slate-200">
+                {notificationsEnabled ? "Notifications are Active" : "Notifications are OFF"}
+              </p>
+              <p className="text-[11px] text-slate-400">
+                {notificationsEnabled
+                  ? "Real-time toast alerts and popups enabled"
+                  : "Toast popups & alert banners are silenced"}
+              </p>
+            </div>
+          </div>
+
+          {onToggleNotificationsEnabled && (
+            <button
+              type="button"
+              onClick={onToggleNotificationsEnabled}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer ${
+                notificationsEnabled
+                  ? "bg-slate-800 hover:bg-rose-950/40 text-slate-300 hover:text-rose-300 border border-slate-700 hover:border-rose-500/30"
+                  : "bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-500/20"
+              }`}
+            >
+              {notificationsEnabled ? (
+                <>
+                  <BellOff className="h-3.5 w-3.5 text-rose-400" />
+                  <span>Turn OFF</span>
+                </>
+              ) : (
+                <>
+                  <Bell className="h-3.5 w-3.5 text-slate-950" />
+                  <span>Turn ON</span>
+                </>
+              )}
+            </button>
+          )}
+        </div>
+
         {/* List */}
         <div className="p-4 overflow-y-auto flex-1 space-y-3">
           {notifications.length === 0 ? (
-            <div className="p-8 text-center text-slate-500 text-xs">
-              No recent notifications.
+            <div className="p-8 text-center text-slate-500 text-xs space-y-1">
+              <BellOff className="h-8 w-8 mx-auto text-slate-600 mb-2" />
+              <p className="font-semibold text-slate-400">No active notifications</p>
+              <p className="text-[11px] text-slate-600">
+                {!notificationsEnabled
+                  ? "Notifications are muted. You won't receive popup interruptions."
+                  : "Activity alerts and reminders will appear here when logged."}
+              </p>
             </div>
           ) : (
             notifications.map((n) => (

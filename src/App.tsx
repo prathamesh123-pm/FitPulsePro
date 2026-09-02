@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, lazy, Suspense, useRef, useCallback } from "react";
 import {
   TabId,
   AppState,
@@ -30,6 +30,9 @@ import {
   auth,
   saveSubmittedDailyReportToCloud,
   saveSubmittedMonthlyReportToCloud,
+  subscribeToCloudChanges,
+  fetchUserAccountFromCloud,
+  subscribeToAnnouncements,
 } from "./services/firebase";
 import { doc, getDocFromServer } from "firebase/firestore";
 
@@ -37,41 +40,66 @@ import { LockScreen } from "./components/LockScreen";
 import { Navbar } from "./components/Navbar";
 import { NavigationTabs } from "./components/NavigationTabs";
 import { DashboardView } from "./components/DashboardView";
-import { WorkoutView } from "./components/WorkoutView";
-import { DietView } from "./components/DietView";
-import { HealthBodyView } from "./components/HealthBodyView";
-import { CoachGymView } from "./components/CoachGymView";
-import { ChecklistRemindersView } from "./components/ChecklistRemindersView";
-import { ReportsView } from "./components/ReportsView";
-import { AILabView } from "./components/AILabView";
-import { FitnessCalculatorsView } from "./components/FitnessCalculatorsView";
-import { ActivityTrackerView } from "./components/ActivityTrackerView";
-import { DailyLifestyleTracker } from "./components/DailyLifestyleTracker";
-import { SecurityProfileModal } from "./components/SecurityProfileModal";
-import { CloudSyncModal } from "./components/CloudSyncModal";
-import { AchievementsModal } from "./components/AchievementsModal";
-import { PlateCalculatorModal } from "./components/PlateCalculatorModal";
-import { PersonalRecordsModal } from "./components/PersonalRecordsModal";
-import { WaterTrackerModal } from "./components/WaterTrackerModal";
-import { AudioCoachHUD } from "./components/AudioCoachHUD";
-import { EnterpriseAuthModal } from "./components/EnterpriseAuthModal";
 import { EnterpriseDashboardView } from "./components/EnterpriseDashboardView";
-import { EnterpriseRateChartsView } from "./components/EnterpriseRateChartsView";
-import { EnterpriseFormsView } from "./components/EnterpriseFormsView";
-import { EnterpriseGroupReportsView } from "./components/EnterpriseGroupReportsView";
 import { ToastNotificationContainer, NotificationDrawer } from "./components/NotificationsSystem";
+import { ViewSkeleton } from "./components/ViewSkeleton";
 import { Language } from "./utils/i18n";
 import { Exercise, WorkoutTemplate, ActivityLog, DailyRoutineLog, AppNotification } from "./types";
+
+// Code-split heavy views & modals for instant initial startup & minimal memory footprint
+const WorkoutView = lazy(() => import("./components/WorkoutView").then(m => ({ default: m.WorkoutView })));
+const DietView = lazy(() => import("./components/DietView").then(m => ({ default: m.DietView })));
+const HealthBodyView = lazy(() => import("./components/HealthBodyView").then(m => ({ default: m.HealthBodyView })));
+const CoachGymView = lazy(() => import("./components/CoachGymView").then(m => ({ default: m.CoachGymView })));
+const ChecklistRemindersView = lazy(() => import("./components/ChecklistRemindersView").then(m => ({ default: m.ChecklistRemindersView })));
+const ReportsView = lazy(() => import("./components/ReportsView").then(m => ({ default: m.ReportsView })));
+const AILabView = lazy(() => import("./components/AILabView").then(m => ({ default: m.AILabView })));
+const FitnessCalculatorsView = lazy(() => import("./components/FitnessCalculatorsView").then(m => ({ default: m.FitnessCalculatorsView })));
+const ActivityTrackerView = lazy(() => import("./components/ActivityTrackerView").then(m => ({ default: m.ActivityTrackerView })));
+const DailyLifestyleTracker = lazy(() => import("./components/DailyLifestyleTracker").then(m => ({ default: m.DailyLifestyleTracker })));
+const EnterpriseRateChartsView = lazy(() => import("./components/EnterpriseRateChartsView").then(m => ({ default: m.EnterpriseRateChartsView })));
+const EnterpriseFormsView = lazy(() => import("./components/EnterpriseFormsView").then(m => ({ default: m.EnterpriseFormsView })));
+const EnterpriseGroupReportsView = lazy(() => import("./components/EnterpriseGroupReportsView").then(m => ({ default: m.EnterpriseGroupReportsView })));
+const UserManagementView = lazy(() => import("./components/UserManagementView").then(m => ({ default: m.UserManagementView })));
+
+// Modals
+const SecurityProfileModal = lazy(() => import("./components/SecurityProfileModal").then(m => ({ default: m.SecurityProfileModal })));
+const CloudSyncModal = lazy(() => import("./components/CloudSyncModal").then(m => ({ default: m.CloudSyncModal })));
+const AchievementsModal = lazy(() => import("./components/AchievementsModal").then(m => ({ default: m.AchievementsModal })));
+const PlateCalculatorModal = lazy(() => import("./components/PlateCalculatorModal").then(m => ({ default: m.PlateCalculatorModal })));
+const PersonalRecordsModal = lazy(() => import("./components/PersonalRecordsModal").then(m => ({ default: m.PersonalRecordsModal })));
+const WaterTrackerModal = lazy(() => import("./components/WaterTrackerModal").then(m => ({ default: m.WaterTrackerModal })));
+const AudioCoachHUD = lazy(() => import("./components/AudioCoachHUD").then(m => ({ default: m.AudioCoachHUD })));
+const EnterpriseAuthModal = lazy(() => import("./components/EnterpriseAuthModal").then(m => ({ default: m.EnterpriseAuthModal })));
 
 export default function App() {
   const [appState, setAppState] = useState<AppState>(() => loadAppState());
   const [isLocked, setIsLocked] = useState<boolean>(() => Boolean(appState.security?.isLocked && appState.security?.pinEnabled));
   const [activeTab, setActiveTab] = useState<TabId>("dashboard");
 
-  // Notifications State
+  // Notifications State (Default: OFF per user request)
+  const [notificationsEnabled, setNotificationsEnabled] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem("FITPULSE_NOTIFICATIONS_ENABLED");
+      if (saved !== null) return saved === "true";
+    } catch {}
+    return appState.notificationsEnabled ?? false;
+  });
+
   const [notifications, setNotifications] = useState<AppNotification[]>(() => appState.notifications || []);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isEnterpriseAuthOpen, setIsEnterpriseAuthOpen] = useState(false);
+
+  const handleToggleNotificationsEnabled = () => {
+    setNotificationsEnabled((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("FITPULSE_NOTIFICATIONS_ENABLED", String(next));
+      } catch {}
+      setAppState((curr) => ({ ...curr, notificationsEnabled: next }));
+      return next;
+    });
+  };
 
   const handleNotify = (
     title: string,
@@ -79,6 +107,11 @@ export default function App() {
     type: "success" | "info" | "warning" | "error" = "info",
     category: "Draft" | "Sync" | "Auth" | "Report" | "Backup" | "System" = "System"
   ) => {
+    // If notifications are turned off, suppress toast popups and alert generation
+    if (!notificationsEnabled) {
+      return;
+    }
+
     const newNotif: AppNotification = {
       id: `notif-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
       title,
@@ -135,18 +168,49 @@ export default function App() {
   const [isWaterTrackerOpen, setIsWaterTrackerOpen] = useState(false);
   const [isAudioCoachOpen, setIsAudioCoachOpen] = useState(false);
 
-  // Auto-save whenever appState updates
+  // Debounced Auto-save to prevent localStorage thrashing and excessive CPU cycles
+  const saveTimeoutRef = useRef<any>(null);
   useEffect(() => {
-    saveAppState(appState);
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+    saveTimeoutRef.current = setTimeout(() => {
+      saveAppState(appState);
+    }, 400);
+
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
   }, [appState]);
 
   // Firebase connection verification test & auth state listener on app startup
   useEffect(() => {
     // 1. Listen for user authentication changes
-    const unsubAuth = onCloudAuthStateChanged((user) => {
+    const unsubAuth = onCloudAuthStateChanged(async (user) => {
       if (user) {
+        let account = await fetchUserAccountFromCloud(user.uid);
+        if (!account) {
+          account = {
+            uid: user.uid,
+            email: user.email || "",
+            displayName: user.displayName || "FitPulse Athlete",
+            photoURL: user.photoURL || undefined,
+            role: user.email?.toLowerCase().includes("admin") ? "Admin" : "Staff",
+            department: "Personal Fitness",
+            companyName: "FitPulse Athletic Pro",
+            designation: "Fitness Athlete",
+            createdAt: new Date().toISOString(),
+            lastLoginAt: new Date().toISOString(),
+            status: "Active",
+            emailVerified: user.emailVerified || false,
+          };
+        }
+
         setAppState((prev) => ({
           ...prev,
+          currentUserAccount: account || prev.currentUserAccount,
           cloudUser: {
             uid: user.uid,
             email: user.email || "",
@@ -156,29 +220,110 @@ export default function App() {
           },
           sync: {
             ...prev.sync,
+            isOnline: navigator.onLine,
             syncStatus: "synced",
             lastSyncDate: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            accountType: "Cloud Authenticated",
           },
         }));
       }
     });
 
-    // 2. Connection verification test per Firebase integration instructions
-    if (db) {
-      try {
-        const testRef = doc(db, "_connection_test_", "ping");
-        getDocFromServer(testRef).catch(() => {
-          // Even if document is missing, reaching Firestore confirms active connection
-        });
-      } catch (err) {
-        // Silently handled
+    // 1.5 Subscribe to system announcements
+    const unsubAnnouncements = subscribeToAnnouncements((announcements) => {
+      if (announcements && announcements.length > 0) {
+        setAppState((prev) => ({
+          ...prev,
+          announcements,
+        }));
       }
+    });
+
+    // 2. Connection verification test per Firebase integration instructions
+    if (db && navigator.onLine) {
+      const testConnection = async () => {
+        try {
+          await getDocFromServer(doc(db, "test", "connection"));
+        } catch (error: any) {
+          if (error instanceof Error && error.message.includes("the client is offline")) {
+            console.info("Firestore operating in offline mode.");
+          }
+        }
+      };
+      testConnection();
     }
+
+    // 3. Online/offline listener
+    const handleOnline = () => {
+      setAppState((prev) => ({
+        ...prev,
+        sync: {
+          ...prev.sync,
+          isOnline: true,
+          syncStatus: "synced",
+          lastSyncDate: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        },
+      }));
+      handleNotify("Connection Restored", "Online mode active. Synchronized with Firebase Cloud.", "success", "Sync");
+    };
+
+    const handleOffline = () => {
+      setAppState((prev) => ({
+        ...prev,
+        sync: {
+          ...prev.sync,
+          isOnline: false,
+          syncStatus: "pending",
+        },
+      }));
+      handleNotify("Offline Mode", "Working offline. Changes will automatically sync when connection returns.", "warning", "Sync");
+    };
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
 
     return () => {
       unsubAuth();
+      unsubAnnouncements?.();
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
     };
   }, []);
+
+  // Real-time Cloud Synchronization listener for multi-device live sync
+  useEffect(() => {
+    const activeUserId = appState.cloudUser?.uid || appState.currentUserAccount?.uid;
+    if (!activeUserId || activeUserId === "guest") return;
+
+    const unsubscribe = subscribeToCloudChanges(activeUserId, (remoteState) => {
+      if (remoteState && typeof remoteState === "object") {
+        setAppState((prev) => {
+          // Compare lastUpdated timestamps or IDs to prevent local overwrite if local is fresher
+          const remoteTime = remoteState.sync?.lastSyncDate;
+          return {
+            ...prev,
+            ...remoteState,
+            profile: remoteState.profile || prev.profile,
+            forms: remoteState.forms || prev.forms,
+            rateCharts: remoteState.rateCharts || prev.rateCharts,
+            groupReports: remoteState.groupReports || prev.groupReports,
+            auditLogs: remoteState.auditLogs || prev.auditLogs,
+            loginHistory: remoteState.loginHistory || prev.loginHistory,
+            sync: {
+              ...prev.sync,
+              isOnline: true,
+              syncStatus: "synced",
+              lastSyncDate: remoteTime || "Just now",
+            },
+          };
+        });
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [appState.cloudUser?.uid, appState.currentUserAccount?.uid]);
 
   // Derived health calculations
   const healthMetrics = useMemo(() => {
@@ -540,7 +685,9 @@ export default function App() {
         membership={appState.membership}
         darkMode={appState.darkMode}
         userRole={appState.currentUserAccount?.role || "Admin"}
-        unreadNotificationsCount={notifications.length}
+        unreadNotificationsCount={notificationsEnabled ? notifications.length : 0}
+        notificationsEnabled={notificationsEnabled}
+        onToggleNotificationsEnabled={handleToggleNotificationsEnabled}
         onToggleDarkMode={handleToggleDarkMode}
         onOpenProfile={() => setIsProfileModalOpen(true)}
         onLockApp={() => setIsLocked(true)}
@@ -557,10 +704,11 @@ export default function App() {
         onToggleLanguage={handleToggleLanguage}
       />
 
-      {/* Floating Real-time Toast Notifications */}
+      {/* Floating Real-time Toast Notifications (Silenced when notifications are OFF) */}
       <ToastNotificationContainer
         notifications={notifications}
         onDismiss={handleDismissNotification}
+        notificationsEnabled={notificationsEnabled}
       />
 
       {/* Slide-in Notifications Drawer */}
@@ -570,6 +718,8 @@ export default function App() {
         notifications={notifications}
         onClearAll={handleClearAllNotifications}
         onDismiss={handleDismissNotification}
+        notificationsEnabled={notificationsEnabled}
+        onToggleNotificationsEnabled={handleToggleNotificationsEnabled}
       />
 
       {/* Enterprise Authentication & RBAC Modal */}
@@ -591,232 +741,268 @@ export default function App() {
           lang={lang}
         />
 
-        {/* Tab Content Switcher */}
+        {/* Tab Content Switcher with Suspense Skeleton Loader */}
         <div className="mt-6">
-          {activeTab === "dashboard" && (
-            <div className="space-y-8">
-              <EnterpriseDashboardView
+          <Suspense fallback={<ViewSkeleton />}>
+            {activeTab === "dashboard" && (
+              <div className="space-y-8">
+                <EnterpriseDashboardView
+                  state={appState}
+                  onUpdateState={setAppState}
+                  onNavigateTab={(tab) => setActiveTab(tab as TabId)}
+                  onNotify={handleNotify}
+                />
+                <div className="border-t border-slate-800 pt-6">
+                  <DashboardView
+                    appState={appState}
+                    healthMetrics={healthMetrics}
+                    onNavigate={(tab) => setActiveTab(tab)}
+                    onQuickAddWater={handleQuickAddWater}
+                    onStartWorkout={handleStartWorkout}
+                    onOpenAchievements={() => setIsAchievementsModalOpen(true)}
+                    onOpenPlateCalculator={() => setIsPlateCalculatorOpen(true)}
+                    onOpenPersonalRecords={() => setIsPRModalOpen(true)}
+                    onOpenWaterTracker={() => setIsWaterTrackerOpen(true)}
+                    onOpenAudioCoach={() => setIsAudioCoachOpen(true)}
+                    lang={lang}
+                  />
+                </div>
+              </div>
+            )}
+
+            {activeTab === "admin-users" && (
+              <UserManagementView
                 state={appState}
                 onUpdateState={setAppState}
-                onNavigateTab={(tab) => setActiveTab(tab as TabId)}
                 onNotify={handleNotify}
               />
-              <div className="border-t border-slate-800 pt-6">
-                <DashboardView
-                  appState={appState}
-                  healthMetrics={healthMetrics}
-                  onNavigate={(tab) => setActiveTab(tab)}
-                  onQuickAddWater={handleQuickAddWater}
-                  onStartWorkout={handleStartWorkout}
-                  onOpenAchievements={() => setIsAchievementsModalOpen(true)}
-                  onOpenPlateCalculator={() => setIsPlateCalculatorOpen(true)}
-                  onOpenPersonalRecords={() => setIsPRModalOpen(true)}
-                  onOpenWaterTracker={() => setIsWaterTrackerOpen(true)}
-                  onOpenAudioCoach={() => setIsAudioCoachOpen(true)}
-                  lang={lang}
-                />
-              </div>
-            </div>
-          )}
+            )}
 
-          {activeTab === "rate-charts" && (
-            <EnterpriseRateChartsView
-              state={appState}
-              onUpdateState={setAppState}
-              onNotify={handleNotify}
-            />
-          )}
+            {activeTab === "rate-charts" && (
+              <EnterpriseRateChartsView
+                state={appState}
+                onUpdateState={setAppState}
+                onNotify={handleNotify}
+              />
+            )}
 
-          {activeTab === "forms" && (
-            <EnterpriseFormsView
-              state={appState}
-              onUpdateState={setAppState}
-              onNotify={handleNotify}
-            />
-          )}
+            {activeTab === "forms" && (
+              <EnterpriseFormsView
+                state={appState}
+                onUpdateState={setAppState}
+                onNotify={handleNotify}
+              />
+            )}
 
-          {activeTab === "group-reports" && (
-            <EnterpriseGroupReportsView
-              state={appState}
-              onUpdateState={setAppState}
-              onNotify={handleNotify}
-            />
-          )}
+            {activeTab === "group-reports" && (
+              <EnterpriseGroupReportsView
+                state={appState}
+                onUpdateState={setAppState}
+                onNotify={handleNotify}
+              />
+            )}
 
-          {activeTab === "workout" && (
-            <WorkoutView
-              activeWorkout={appState.activeWorkout}
-              workoutHistory={appState.workoutHistory}
-              customExercises={appState.customExercises || []}
-              workoutTemplates={appState.workoutTemplates || []}
-              onSaveActiveWorkout={handleSaveActiveWorkout}
-              onFinishWorkout={handleFinishWorkout}
-              onDeleteWorkoutHistory={handleDeleteWorkoutHistory}
-              onUpdateCustomExercises={handleUpdateCustomExercises}
-              onUpdateWorkoutTemplates={handleUpdateWorkoutTemplates}
-            />
-          )}
+            {activeTab === "workout" && (
+              <WorkoutView
+                activeWorkout={appState.activeWorkout}
+                workoutHistory={appState.workoutHistory}
+                coachPlans={appState.coachPlans || []}
+                customExercises={appState.customExercises || []}
+                workoutTemplates={appState.workoutTemplates || []}
+                onSaveActiveWorkout={handleSaveActiveWorkout}
+                onFinishWorkout={handleFinishWorkout}
+                onDeleteWorkoutHistory={handleDeleteWorkoutHistory}
+                onUpdateCustomExercises={handleUpdateCustomExercises}
+                onUpdateWorkoutTemplates={handleUpdateWorkoutTemplates}
+                onUpdateCoachPlans={(plans) =>
+                  setAppState((prev) => ({ ...prev, coachPlans: plans }))
+                }
+              />
+            )}
 
-          {activeTab === "diet" && (
-            <DietView
-              dailyNutrition={appState.dailyNutrition}
-              healthMetrics={healthMetrics}
-              onUpdateDailyNutrition={handleUpdateDailyNutrition}
-              customFoods={appState.customFoods || []}
-              onUpdateCustomFoods={handleUpdateCustomFoods}
-              savedDietPlans={appState.savedDietPlans || []}
-              activeDietPlanId={appState.activeDietPlanId}
-              onUpdateSavedDietPlans={handleUpdateSavedDietPlans}
-              onSelectActiveDietPlan={handleSelectActiveDietPlan}
-              userId={appState.cloudUser?.uid || auth?.currentUser?.uid || "guest"}
-              isWorkoutCompletedToday={Boolean(appState.workoutHistory.some((w) => w.date === "2026-08-28" && w.completed))}
-            />
-          )}
+            {activeTab === "diet" && (
+              <DietView
+                dailyNutrition={appState.dailyNutrition}
+                healthMetrics={healthMetrics}
+                onUpdateDailyNutrition={handleUpdateDailyNutrition}
+                customFoods={appState.customFoods || []}
+                onUpdateCustomFoods={handleUpdateCustomFoods}
+                savedDietPlans={appState.savedDietPlans || []}
+                activeDietPlanId={appState.activeDietPlanId}
+                onUpdateSavedDietPlans={handleUpdateSavedDietPlans}
+                onSelectActiveDietPlan={handleSelectActiveDietPlan}
+                userId={appState.cloudUser?.uid || auth?.currentUser?.uid || "guest"}
+                isWorkoutCompletedToday={Boolean(
+                  appState.workoutHistory.some(
+                    (w) => (w.date === new Date().toISOString().split("T")[0] || w.date === "2026-08-28") && w.completed
+                  )
+                )}
+              />
+            )}
 
-          {activeTab === "activity" && (
-            <ActivityTrackerView
-              state={appState}
-              onUpdateState={setAppState}
-              onNotify={handleNotify}
-            />
-          )}
+            {activeTab === "activity" && (
+              <ActivityTrackerView
+                state={appState}
+                onUpdateState={setAppState}
+                onNotify={handleNotify}
+              />
+            )}
 
-          {activeTab === "lifestyle" && (
-            <DailyLifestyleTracker
-              dailyRoutines={appState.dailyRoutines || {}}
-              onUpdateDailyRoutine={handleUpdateDailyRoutine}
-            />
-          )}
+            {activeTab === "lifestyle" && (
+              <DailyLifestyleTracker
+                dailyRoutines={appState.dailyRoutines || {}}
+                onUpdateDailyRoutine={handleUpdateDailyRoutine}
+              />
+            )}
 
-          {activeTab === "health" && (
-            <HealthBodyView
-              profile={appState.profile}
-              healthMetrics={healthMetrics}
-              measurements={appState.measurements}
-              progressPhotos={appState.progressPhotos}
-              onUpdateProfileGoal={handleUpdateProfileGoal}
-              onAddMeasurement={handleAddMeasurement}
-              onAddProgressPhoto={handleAddProgressPhoto}
-            />
-          )}
+            {activeTab === "health" && (
+              <HealthBodyView
+                profile={appState.profile}
+                healthMetrics={healthMetrics}
+                measurements={appState.measurements}
+                progressPhotos={appState.progressPhotos}
+                onUpdateProfileGoal={handleUpdateProfileGoal}
+                onAddMeasurement={handleAddMeasurement}
+                onAddProgressPhoto={handleAddProgressPhoto}
+              />
+            )}
 
-          {activeTab === "calculators" && (
-            <FitnessCalculatorsView
-              profile={appState.profile}
-              healthMetrics={healthMetrics}
-              onUpdateProfile={handleUpdateProfile}
-            />
-          )}
+            {activeTab === "calculators" && (
+              <FitnessCalculatorsView
+                profile={appState.profile}
+                healthMetrics={healthMetrics}
+                onUpdateProfile={handleUpdateProfile}
+              />
+            )}
 
-          {activeTab === "coach" && (
-            <CoachGymView
-              coachPlans={appState.coachPlans}
-              membership={appState.membership}
-              attendance={appState.attendance}
-              appState={appState}
-              onUpdateCoachPlanStatus={handleUpdateCoachPlanStatus}
-              onAddCoachPlan={handleAddCoachPlan}
-              onUpdateMembership={handleUpdateMembership}
-              onUpdateAttendance={handleUpdateAttendance}
-            />
-          )}
+            {activeTab === "coach" && (
+              <CoachGymView
+                coachPlans={appState.coachPlans}
+                membership={appState.membership}
+                attendance={appState.attendance}
+                appState={appState}
+                onUpdateCoachPlanStatus={handleUpdateCoachPlanStatus}
+                onAddCoachPlan={handleAddCoachPlan}
+                onUpdateMembership={handleUpdateMembership}
+                onUpdateAttendance={handleUpdateAttendance}
+              />
+            )}
 
-          {activeTab === "checklist" && (
-            <ChecklistRemindersView
-              checklists={appState.checklists}
-              reminders={appState.reminders}
-              onUpdateChecklist={handleUpdateChecklist}
-              onUpdateReminders={handleUpdateReminders}
-            />
-          )}
+            {activeTab === "checklist" && (
+              <ChecklistRemindersView
+                checklists={appState.checklists}
+                reminders={appState.reminders}
+                onUpdateChecklist={handleUpdateChecklist}
+                onUpdateReminders={handleUpdateReminders}
+              />
+            )}
 
-          {activeTab === "reports" && (
-            <ReportsView
-              appState={appState}
-              healthMetrics={healthMetrics}
-              onUpdateActivityLogs={handleUpdateActivityLogs}
-              onUpdateDailyRoutine={handleUpdateDailyRoutine}
-              onSubmitDailyReport={handleSubmitDailyReport}
-              onUnlockDailyReport={handleUnlockDailyReport}
-              onSubmitMonthlyReport={handleSubmitMonthlyReport}
-              onDeleteFoodItem={handleDeleteFoodFromDailyNutrition}
-              onQuickAdjustDailyNutrition={handleQuickAdjustDailyNutrition}
-              onDeleteWorkoutHistory={handleDeleteWorkoutHistory}
-              onUpdateNutritionLog={handleUpdateDailyNutrition}
-            />
-          )}
+            {activeTab === "reports" && (
+              <ReportsView
+                appState={appState}
+                healthMetrics={healthMetrics}
+                onUpdateState={setAppState}
+                onNotify={handleNotify}
+                onUpdateActivityLogs={handleUpdateActivityLogs}
+                onUpdateDailyRoutine={handleUpdateDailyRoutine}
+                onSubmitDailyReport={handleSubmitDailyReport}
+                onUnlockDailyReport={handleUnlockDailyReport}
+                onSubmitMonthlyReport={handleSubmitMonthlyReport}
+                onDeleteFoodItem={handleDeleteFoodFromDailyNutrition}
+                onQuickAdjustDailyNutrition={handleQuickAdjustDailyNutrition}
+                onDeleteWorkoutHistory={handleDeleteWorkoutHistory}
+                onUpdateNutritionLog={handleUpdateDailyNutrition}
+              />
+            )}
 
-          {activeTab === "ailab" && (
-            <AILabView
-              profile={appState.profile}
-              healthMetrics={healthMetrics}
-            />
-          )}
+            {activeTab === "ailab" && (
+              <AILabView
+                profile={appState.profile}
+                healthMetrics={healthMetrics}
+              />
+            )}
+          </Suspense>
         </div>
       </main>
 
-      {/* Profile & Security Modal */}
-      <SecurityProfileModal
-        isOpen={isProfileModalOpen}
-        onClose={() => setIsProfileModalOpen(false)}
-        profile={appState.profile}
-        security={appState.security}
-        sync={appState.sync}
-        fullAppState={appState}
-        onUpdateProfile={handleUpdateProfile}
-        onUpdateSecurity={handleUpdateSecurity}
-        onUpdateSync={handleUpdateSync}
-        onRestoreAppState={handleRestoreAppState}
-      />
+      {/* Lazy-Loaded Modals with Suspense */}
+      <Suspense fallback={null}>
+        {isProfileModalOpen && (
+          <SecurityProfileModal
+            isOpen={isProfileModalOpen}
+            onClose={() => setIsProfileModalOpen(false)}
+            profile={appState.profile}
+            security={appState.security}
+            sync={appState.sync}
+            fullAppState={appState}
+            notificationsEnabled={notificationsEnabled}
+            onToggleNotificationsEnabled={handleToggleNotificationsEnabled}
+            onUpdateProfile={handleUpdateProfile}
+            onUpdateSecurity={handleUpdateSecurity}
+            onUpdateSync={handleUpdateSync}
+            onRestoreAppState={handleRestoreAppState}
+          />
+        )}
 
-      {/* Cloud Sync & Firebase Multi-Device Modal */}
-      <CloudSyncModal
-        isOpen={isCloudSyncModalOpen}
-        onClose={() => setIsCloudSyncModalOpen(false)}
-        syncStatus={appState.sync}
-        fullAppState={appState}
-        onTriggerSync={handleTriggerSync}
-        onRestoreAppState={handleRestoreAppState}
-      />
+        {isCloudSyncModalOpen && (
+          <CloudSyncModal
+            isOpen={isCloudSyncModalOpen}
+            onClose={() => setIsCloudSyncModalOpen(false)}
+            syncStatus={appState.sync}
+            fullAppState={appState}
+            onTriggerSync={handleTriggerSync}
+            onRestoreAppState={handleRestoreAppState}
+          />
+        )}
 
-      {/* Section 41: Achievements & Milestones Modal */}
-      <AchievementsModal
-        isOpen={isAchievementsModalOpen}
-        onClose={() => setIsAchievementsModalOpen(false)}
-        achievements={appState.achievements || []}
-      />
+        {isAchievementsModalOpen && (
+          <AchievementsModal
+            isOpen={isAchievementsModalOpen}
+            onClose={() => setIsAchievementsModalOpen(false)}
+            achievements={appState.achievements || []}
+          />
+        )}
 
-      {/* Barbell Plate Loader Visualizer Modal */}
-      <PlateCalculatorModal
-        isOpen={isPlateCalculatorOpen}
-        onClose={() => setIsPlateCalculatorOpen(false)}
-        lang={lang}
-      />
+        {isPlateCalculatorOpen && (
+          <PlateCalculatorModal
+            isOpen={isPlateCalculatorOpen}
+            onClose={() => setIsPlateCalculatorOpen(false)}
+            lang={lang}
+          />
+        )}
 
-      {/* Personal Records & Strength PRs Modal */}
-      <PersonalRecordsModal
-        isOpen={isPRModalOpen}
-        onClose={() => setIsPRModalOpen(false)}
-        userBodyweightKg={appState.profile.weightKg}
-        lang={lang}
-      />
+        {isPRModalOpen && (
+          <PersonalRecordsModal
+            isOpen={isPRModalOpen}
+            onClose={() => setIsPRModalOpen(false)}
+            userBodyweightKg={appState.profile.weightKg}
+            lang={lang}
+          />
+        )}
 
-      {/* Daily Hydration Visual Water Tracker Modal */}
-      <WaterTrackerModal
-        isOpen={isWaterTrackerOpen}
-        onClose={() => setIsWaterTrackerOpen(false)}
-        currentWaterMl={appState.dailyNutrition["2026-08-28"]?.waterLoggedMl || 0}
-        targetWaterMl={healthMetrics.dailyWaterMl}
-        onAddWater={(amount) => handleQuickAddWater(amount)}
-        lang={lang}
-      />
+        {isWaterTrackerOpen && (
+          <WaterTrackerModal
+            isOpen={isWaterTrackerOpen}
+            onClose={() => setIsWaterTrackerOpen(false)}
+            currentWaterMl={
+              appState.dailyNutrition[new Date().toISOString().split("T")[0]]?.waterLoggedMl ??
+              appState.dailyNutrition["2026-08-28"]?.waterLoggedMl ??
+              0
+            }
+            targetWaterMl={healthMetrics.dailyWaterMl}
+            onAddWater={(amount) => handleQuickAddWater(amount)}
+            lang={lang}
+          />
+        )}
 
-      {/* Audio Coach, Rest Timer & Tempo Metronome HUD */}
-      <AudioCoachHUD
-        isOpen={isAudioCoachOpen}
-        onClose={() => setIsAudioCoachOpen(false)}
-        lang={lang}
-      />
+        {isAudioCoachOpen && (
+          <AudioCoachHUD
+            isOpen={isAudioCoachOpen}
+            onClose={() => setIsAudioCoachOpen(false)}
+            lang={lang}
+          />
+        )}
+      </Suspense>
     </div>
   );
 }

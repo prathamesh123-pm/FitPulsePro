@@ -23,6 +23,7 @@ import {
   ProgressPhoto,
   FitnessGoal,
 } from "../types";
+import { readFileAndCompress } from "../utils/imageOptimizer";
 import {
   ResponsiveContainer,
   LineChart,
@@ -746,14 +747,34 @@ export function HealthBodyView({
               </div>
 
               <div>
-                <label className="text-slate-400">Image URL (or Unsplash sample)</label>
-                <input
-                  type="text"
-                  value={photoUrlInput}
-                  onChange={(e) => setPhotoUrlInput(e.target.value)}
-                  className="mt-1 w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2 text-slate-100"
-                  required
-                />
+                <label className="text-slate-400">Upload Photo or Image URL</label>
+                <div className="mt-1 space-y-2">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        try {
+                          const compressed = await readFileAndCompress(file, { maxWidth: 800, maxHeight: 800, quality: 0.75 });
+                          setPhotoUrlInput(compressed);
+                        } catch (err) {
+                          console.error("Compression error:", err);
+                        }
+                      }
+                    }}
+                    className="block w-full text-xs text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-emerald-500/10 file:text-emerald-400 hover:file:bg-emerald-500/20 cursor-pointer"
+                  />
+                  <div className="text-[10px] text-slate-500 text-center">- OR paste URL below -</div>
+                  <input
+                    type="text"
+                    value={photoUrlInput}
+                    onChange={(e) => setPhotoUrlInput(e.target.value)}
+                    placeholder="https://..."
+                    className="w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2 text-slate-100"
+                    required
+                  />
+                </div>
               </div>
 
               <div>

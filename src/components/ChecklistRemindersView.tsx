@@ -2,6 +2,7 @@ import React, { useState, useMemo } from "react";
 import {
   CheckSquare,
   Bell,
+  BellOff,
   Clock,
   Plus,
   Flame,
@@ -32,7 +33,8 @@ export function ChecklistRemindersView({
   onUpdateChecklist,
   onUpdateReminders,
 }: ChecklistRemindersViewProps) {
-  const currentDate = "2026-08-28";
+  const realToday = new Date().toISOString().split("T")[0];
+  const currentDate = checklists[realToday] ? realToday : (checklists["2026-08-28"] ? "2026-08-28" : realToday);
   const [selectedDate, setSelectedDate] = useState(currentDate);
   const [isAddReminderOpen, setIsAddReminderOpen] = useState(false);
 
@@ -252,7 +254,36 @@ export function ChecklistRemindersView({
             <h3 className="text-xs font-bold uppercase tracking-wider text-indigo-400">Section 18 • Smart Reminders & Scheduling Alerts</h3>
             <p className="text-xs text-slate-400">Workout, Meal, Water, Supplement, Membership, Weight, Photo, and Sleep alerts</p>
           </div>
-          <span className="text-xs text-slate-400">{reminders.filter((r) => r.enabled).length} Active Reminders</span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                const anyActive = reminders.some((r) => r.enabled);
+                const updated = reminders.map((r) => ({ ...r, enabled: !anyActive }));
+                onUpdateReminders(updated);
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition border cursor-pointer ${
+                reminders.some((r) => r.enabled)
+                  ? "bg-slate-800 hover:bg-rose-950/40 text-slate-300 hover:text-rose-300 border-slate-700 hover:border-rose-500/30"
+                  : "bg-emerald-500 hover:bg-emerald-400 text-slate-950 border-emerald-400"
+              }`}
+            >
+              {reminders.some((r) => r.enabled) ? (
+                <>
+                  <BellOff className="w-3.5 h-3.5 text-rose-400" />
+                  <span>Turn Off All Reminders</span>
+                </>
+              ) : (
+                <>
+                  <Bell className="w-3.5 h-3.5 text-slate-950" />
+                  <span>Turn On All Reminders</span>
+                </>
+              )}
+            </button>
+            <span className="text-xs text-slate-400 font-medium">
+              {reminders.filter((r) => r.enabled).length} Active
+            </span>
+          </div>
         </div>
 
         {/* Reminders List */}

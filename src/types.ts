@@ -16,6 +16,7 @@ export type Gender = "Male" | "Female" | "Other";
 
 export type TabId =
   | "dashboard"
+  | "admin-users"
   | "rate-charts"
   | "forms"
   | "group-reports"
@@ -59,6 +60,8 @@ export interface UserProfile {
   securityPinEnabled?: boolean;
   age?: number;
   workoutDaysPerWeek?: number;
+  targetCalories?: number;
+  targetBodyFatPct?: number;
 }
 
 export interface HealthCalculations {
@@ -201,29 +204,71 @@ export type ActivityType =
   | "Walking"
   | "Running"
   | "Cycling"
+  | "Swimming"
+  | "Gym Workout"
+  | "Yoga"
+  | "Stretching"
+  | "Sports"
+  | "Stair Climbing"
+  | "Skipping Rope"
+  | "Meditation"
   | "Treadmill"
   | "Outdoor Running"
   | "Elliptical"
-  | "Jump Rope"
-  | "Swimming"
-  | "Sports"
+  | "HIIT"
   | "Other Sports"
-  | "Other"
-  | "Gym Workout"
-  | "Yoga"
-  | "HIIT";
+  | "Custom Activity"
+  | "Other";
 
 export interface ActivityLog {
   id: string;
   date: string;
   activityType: ActivityType;
+  customActivityName?: string;
   startTime?: string;
+  endTime?: string;
   durationMinutes: number;
   distanceKm: number;
+  steps?: number;
   caloriesBurned: number;
+  estimatedFatBurnedGrams?: number;
   avgSpeedKmh?: number;
+  paceMinPerKm?: string;
+  swimmingLaps?: number;
   heartRateBpm?: number;
+  intensity?: "Low" | "Moderate" | "High" | "Vigorous";
   routeNotes?: string;
+  photoUrl?: string;
+  createdAt?: string;
+}
+
+export interface DailyFitnessGoals {
+  dailyStepsGoal: number;
+  walkingDistanceKmGoal: number;
+  runningDistanceKmGoal: number;
+  cyclingDistanceKmGoal: number;
+  swimmingDistanceKmGoal: number;
+  workoutDurationMinGoal: number;
+  caloriesBurnedGoal: number;
+  waterIntakeMlGoal: number;
+  weightLossTargetKg?: number;
+  fatLossTargetPct?: number;
+}
+
+export interface HealthVitalsLog {
+  date: string;
+  weightKg?: number;
+  bodyFatPct?: number;
+  bmi?: number;
+  waistCm?: number;
+  chestCm?: number;
+  hipCm?: number;
+  bloodPressureSystolic?: number;
+  bloodPressureDiastolic?: number;
+  bloodSugarMgDl?: number;
+  restingHeartRateBpm?: number;
+  sleepHours?: number;
+  notes?: string;
 }
 
 export interface DailyRoutineLog {
@@ -646,11 +691,31 @@ export interface UserAccount {
   mobileNumber?: string;
   displayName: string;
   photoURL?: string;
+  companyName?: string;
+  designation?: string;
+  address?: string;
   role: UserRole;
   department?: string;
   createdAt: string;
   lastLoginAt: string;
-  status: "Active" | "Suspended" | "Pending";
+  emailVerified?: boolean;
+  status: "Active" | "Disabled" | "Suspended" | "Pending";
+  rememberMe?: boolean;
+  inactivityTimeoutMinutes?: number;
+  fcmToken?: string;
+}
+
+export interface BroadcastAnnouncement {
+  id: string;
+  title: string;
+  message: string;
+  targetRole: "All" | UserRole;
+  priority: "Normal" | "High" | "Urgent";
+  createdBy: string;
+  createdByName: string;
+  createdAt: string;
+  expiresAt?: string;
+  readBy?: string[];
 }
 
 export interface LoginHistoryRecord {
@@ -660,6 +725,8 @@ export interface LoginHistoryRecord {
   userRole: UserRole;
   timestamp: string;
   device: string;
+  os?: string;
+  appVersion?: string;
   ipAddress: string;
   location: string;
   method: "Email/Password" | "Mobile OTP" | "Google Sign-In" | "Biometric/PIN";
@@ -690,7 +757,9 @@ export type AuditModule =
   | "Membership"
   | "Security"
   | "User Management"
-  | "Cloud Sync";
+  | "Authentication"
+  | "Cloud Sync"
+  | "Activity Tracker";
 
 export interface AuditLogEntry {
   id: string;
@@ -810,6 +879,8 @@ export interface EnterpriseGroupReport {
   approvedBy?: string;
 }
 
+export type GroupProgressReport = EnterpriseGroupReport;
+
 export interface AppNotification {
   id: string;
   title: string;
@@ -829,6 +900,7 @@ export interface AppState {
   forms: FormSubmissionRecord[];
   groupReports: EnterpriseGroupReport[];
   notifications: AppNotification[];
+  notificationsEnabled?: boolean;
   formDrafts: Record<string, FormSubmissionRecord>;
   activeWorkout: WorkoutSession | null;
   workoutHistory: WorkoutSession[];
@@ -849,12 +921,15 @@ export interface AppState {
   activeDietPlanId?: string;
   workoutTemplates: WorkoutTemplate[];
   activityLogs: ActivityLog[];
+  fitnessGoals?: DailyFitnessGoals;
+  healthVitals?: Record<string, HealthVitalsLog>; // key: YYYY-MM-DD
   dailyRoutines: Record<string, DailyRoutineLog>; // key: YYYY-MM-DD
   nightlyReports: Record<string, SmartCoachNightlyReport>; // key: YYYY-MM-DD
   submittedReports?: Record<string, SubmittedDailyReport>; // key: YYYY-MM-DD
   submittedMonthlyReports?: Record<string, SubmittedMonthlyReport>; // key: YYYY-MM
   security: SecuritySettings;
   sync: CloudSyncState;
+  announcements?: BroadcastAnnouncement[];
   cloudUser?: {
     uid: string;
     email?: string;

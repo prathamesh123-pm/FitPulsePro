@@ -62,7 +62,8 @@ export function CoachGymView({
   const [isMarkAttendanceModalOpen, setIsMarkAttendanceModalOpen] = useState(false);
   const [renewSuccess, setRenewSuccess] = useState(false);
 
-  const todayKey = "2026-08-28";
+  const realToday = new Date().toISOString().split("T")[0];
+  const todayKey = attendance?.[realToday] ? realToday : (attendance?.["2026-08-28"] ? "2026-08-28" : realToday);
 
   // Section 40: Generate Nightly Coaching Report
   const nightlyReport: SmartCoachNightlyReport = useMemo(() => {

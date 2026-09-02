@@ -20,6 +20,7 @@ import {
   Flame,
   Info,
   Download,
+  CalendarDays,
 } from "lucide-react";
 import {
   WorkoutSession,
@@ -28,16 +29,19 @@ import {
   MuscleGroup,
   Exercise,
   WorkoutTemplate,
+  CoachWorkoutPlan,
 } from "../types";
 import { ENRICHED_EXERCISES, MUSCLE_GROUPS } from "../data/exercises";
 import { ExerciseLibraryModal } from "./ExerciseLibraryModal";
 import { FinishWorkoutModal } from "./FinishWorkoutModal";
 import { WorkoutTemplatesTab } from "./WorkoutTemplatesTab";
+import { WorkoutCalendarView } from "./WorkoutCalendarView";
 import { exportWorkoutsToCSV } from "../utils/csvExport";
 
 interface WorkoutViewProps {
   activeWorkout: WorkoutSession | null;
   workoutHistory: WorkoutSession[];
+  coachPlans?: CoachWorkoutPlan[];
   customExercises?: Exercise[];
   workoutTemplates?: WorkoutTemplate[];
   onSaveActiveWorkout: (workout: WorkoutSession | null) => void;
@@ -45,11 +49,13 @@ interface WorkoutViewProps {
   onDeleteWorkoutHistory?: (id: string) => void;
   onUpdateCustomExercises?: (exercises: Exercise[]) => void;
   onUpdateWorkoutTemplates?: (templates: WorkoutTemplate[]) => void;
+  onUpdateCoachPlans?: (plans: CoachWorkoutPlan[]) => void;
 }
 
 export function WorkoutView({
   activeWorkout,
   workoutHistory,
+  coachPlans = [],
   customExercises = [],
   workoutTemplates = [],
   onSaveActiveWorkout,
@@ -57,9 +63,10 @@ export function WorkoutView({
   onDeleteWorkoutHistory,
   onUpdateCustomExercises = () => {},
   onUpdateWorkoutTemplates = () => {},
+  onUpdateCoachPlans = () => {},
 }: WorkoutViewProps) {
-  // Navigation sub-tabs: "tracker" | "templates" | "history"
-  const [activeSubTab, setActiveSubTab] = useState<"tracker" | "templates" | "history">("tracker");
+  // Navigation sub-tabs: "tracker" | "calendar" | "templates" | "history"
+  const [activeSubTab, setActiveSubTab] = useState<"tracker" | "calendar" | "templates" | "history">("tracker");
 
   // Modals state
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
@@ -84,7 +91,8 @@ export function WorkoutView({
   // Start new empty workout
   const handleStartEmptyWorkout = (
     name = "Custom Strength Session",
-    primaryMuscle: MuscleGroup | "Mixed" = "Chest"
+    primaryMuscle: MuscleGroup | "Mixed" = "Chest",
+    targetDate?: string
   ) => {
     const now = new Date();
     const newSession: WorkoutSession = {
@@ -92,7 +100,7 @@ export function WorkoutView({
       workoutName: name,
       workoutType: "Hypertrophy",
       muscleGroup: primaryMuscle,
-      date: now.toISOString().split("T")[0],
+      date: targetDate || now.toISOString().split("T")[0],
       startTime: now.toTimeString().slice(0, 5),
       endTime: "",
       durationMinutes: 60, // manual input
@@ -105,6 +113,68 @@ export function WorkoutView({
     };
     onSaveActiveWorkout(newSession);
     setActiveSubTab("tracker");
+  };
+
+  // Start workout from a Coach Plan
+  const handleStartFromCoachPlan = (plan: CoachWorkoutPlan) => {
+    const now = new Date();
+    const exerciseLogs: WorkoutExerciseLog[] = (plan.exercises || []).map((pe, idx) => {
+      const setsCount = pe.sets || 3;
+      const repsNum = Number(pe.reps?.split("-")[0]) || 10;
+      const sets: WorkoutSet[] = Array.from({ length: setsCount }).map((_, sIdx) => ({
+        id: `set-${Date.now()}-${idx}-${sIdx}`,
+        setNumber: sIdx + 1,
+        weightKg: pe.weightKg || 50,
+        plannedWeightKg: pe.weightKg || 50,
+        reps: repsNum,
+        plannedReps: repsNum,
+        completed: false,
+        notes: pe.notes || "",
+      }));
+
+      return {
+        exerciseId: pe.exerciseId || `ex-${idx}`,
+        exerciseName: pe.exerciseName,
+        muscleGroup: "Chest",
+        plannedSets: setsCount,
+        plannedReps: repsNum,
+        plannedWeightKg: pe.weightKg || 50,
+        exerciseNotes: pe.instructions || pe.notes || "",
+        sets,
+      };
+    });
+
+    const newSession: WorkoutSession = {
+      id: `workout-${Date.now()}`,
+      workoutName: plan.planTitle,
+      workoutType: "Hypertrophy",
+      muscleGroup: "Mixed",
+      date: plan.workoutDate || now.toISOString().split("T")[0],
+      startTime: now.toTimeString().slice(0, 5),
+      endTime: "",
+      durationMinutes: 60,
+      caloriesBurned: 400,
+      notes: `${plan.instructions ? plan.instructions + " • " : ""}Coach: ${plan.coachName}`,
+      workoutMood: "Energized",
+      energyLevel: 8,
+      completed: false,
+      exercises: exerciseLogs,
+    };
+
+    onSaveActiveWorkout(newSession);
+    setActiveSubTab("tracker");
+  };
+
+  // Schedule a new plan into coachPlans
+  const handleSchedulePlan = (newPlan: CoachWorkoutPlan) => {
+    const updated = [newPlan, ...coachPlans];
+    onUpdateCoachPlans(updated);
+  };
+
+  // Delete a scheduled plan
+  const handleDeleteScheduledPlan = (id: string) => {
+    const updated = coachPlans.filter((p) => p.id !== id);
+    onUpdateCoachPlans(updated);
   };
 
   // Start workout from a saved Template
@@ -379,6 +449,17 @@ export function WorkoutView({
               Workout Tracker
             </button>
             <button
+              onClick={() => setActiveSubTab("calendar")}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                activeSubTab === "calendar"
+                  ? "bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              <Calendar className="h-3.5 w-3.5" />
+              <span>Calendar ({workoutHistory.length + coachPlans.length})</span>
+            </button>
+            <button
               onClick={() => setActiveSubTab("templates")}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
                 activeSubTab === "templates"
@@ -439,6 +520,14 @@ export function WorkoutView({
                 >
                   <Plus className="h-4 w-4 stroke-[3]" />
                   <span>Start New Workout</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveSubTab("calendar")}
+                  className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs transition cursor-pointer"
+                >
+                  <Calendar className="h-4 w-4 text-emerald-400" />
+                  <span>Workout Calendar & Schedule</span>
                 </button>
 
                 <button
@@ -866,7 +955,24 @@ export function WorkoutView({
       )}
 
       {/* ========================================================================= */}
-      {/* SUBTAB 2: WORKOUT TEMPLATES */}
+      {/* SUBTAB 2: WORKOUT CALENDAR & SCHEDULE */}
+      {/* ========================================================================= */}
+      {activeSubTab === "calendar" && (
+        <WorkoutCalendarView
+          workoutHistory={workoutHistory}
+          coachPlans={coachPlans}
+          workoutTemplates={workoutTemplates}
+          activeWorkout={activeWorkout}
+          onStartWorkoutFromTemplate={handleStartFromTemplate}
+          onStartWorkoutFromPlan={handleStartFromCoachPlan}
+          onStartEmptyWorkout={handleStartEmptyWorkout}
+          onSchedulePlan={handleSchedulePlan}
+          onDeleteScheduledPlan={handleDeleteScheduledPlan}
+        />
+      )}
+
+      {/* ========================================================================= */}
+      {/* SUBTAB 3: WORKOUT TEMPLATES */}
       {/* ========================================================================= */}
       {activeSubTab === "templates" && (
         <WorkoutTemplatesTab

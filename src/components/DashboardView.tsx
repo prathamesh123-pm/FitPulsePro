@@ -27,9 +27,11 @@ import {
   Heart,
   Timer,
   Bike,
+  Waves,
   Layers,
   Volume2,
 } from "lucide-react";
+import { computeDailyActivityAggregates } from "../utils/activityAnalytics";
 import {
   AppState,
   UserProfile,
@@ -78,7 +80,8 @@ export function DashboardView({
   lang = "en",
 }: DashboardViewProps) {
   const t = TRANSLATIONS[lang] || TRANSLATIONS.en;
-  const todayKey = "2026-08-28";
+  const realToday = new Date().toISOString().split("T")[0];
+  const todayKey = appState.dailyNutrition[realToday] ? realToday : (appState.dailyNutrition["2026-08-28"] ? "2026-08-28" : realToday);
   const todayNutrition: DailyNutritionLog = appState.dailyNutrition[todayKey] || {
     date: todayKey,
     meals: [],
@@ -184,12 +187,16 @@ export function DashboardView({
   const sleepDone = sleepHours >= 7;
   const caloriesDone = dietStatus !== "Diet Broken";
 
-  // Section 42: Durations (Workout, Cardio, Cycling, Running, Treadmill)
+  // Section 42 & Daily Activity Analytics
+  const activityAggregates = useMemo(() => {
+    return computeDailyActivityAggregates(appState, todayKey);
+  }, [appState, todayKey]);
+
   const durations = {
-    workoutTimeMin: 50,
-    cardioTimeMin: 25,
-    cyclingTimeMin: 15,
-    runningTimeMin: 20,
+    workoutTimeMin: activityAggregates.totalWorkoutTimeMin,
+    cardioTimeMin: Math.round(activityAggregates.totalRunningKm * 6),
+    cyclingTimeMin: Math.round(activityAggregates.totalCyclingKm * 2.5),
+    runningTimeMin: Math.round(activityAggregates.totalRunningKm * 5.5),
     treadmillTimeMin: 15,
   };
 
@@ -283,59 +290,216 @@ export function DashboardView({
         </div>
       </div>
 
-      {/* SECTION 42: ACTIVITY DURATIONS STRIP */}
-      <div className="rounded-2xl bg-slate-900 border border-slate-800 p-4 shadow-sm space-y-2">
-        <div className="flex items-center justify-between text-xs">
-          <div className="flex items-center gap-2">
-            <Clock className="h-4 w-4 text-emerald-400" />
-            <span className="font-bold text-slate-200 uppercase tracking-wider text-[11px]">
-              Today's Activity Times Logged
-            </span>
+      {/* DAILY ACTIVITY TRACKER & FITNESS ANALYTICS INTEGRATION */}
+      <div className="rounded-2xl bg-slate-900 border border-slate-800 p-5 shadow-xl space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-slate-800">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+              <Activity className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-bold text-slate-100">Daily Activity & Movement Analytics</h3>
+                <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-bold border border-emerald-500/20">
+                  {activityAggregates.goalCompletionPct}% Goals Met
+                </span>
+              </div>
+              <p className="text-xs text-slate-400">
+                Continuous biometric tracking, active calories, and lipid oxidation for {todayKey}
+              </p>
+            </div>
           </div>
-          <span className="text-[11px] text-slate-400 font-medium">
-            Total Active Time: {durations.workoutTimeMin + durations.cardioTimeMin + durations.cyclingTimeMin + durations.runningTimeMin + durations.treadmillTimeMin} mins
-          </span>
+
+          <button
+            type="button"
+            onClick={() => onNavigate("activity")}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold shadow-md shadow-emerald-500/20 transition cursor-pointer self-start sm:self-auto"
+          >
+            <span>Open Activity Hub</span>
+            <ArrowRight className="h-3.5 w-3.5" />
+          </button>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
-          <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Dumbbell className="h-3.5 w-3.5 text-emerald-400" />
-              <span className="text-slate-300 font-medium">Workout Time</span>
+        {/* 10 Core Metrics Grid with Progress Indicators */}
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 text-xs">
+          {/* 1. Walking KM */}
+          <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1.5">
+            <div className="flex items-center justify-between text-[10px] text-slate-400">
+              <span className="flex items-center gap-1 font-semibold uppercase"><Footprints className="h-3 w-3 text-emerald-400" /> Walking</span>
+              <span className="font-bold text-slate-200">{activityAggregates.totalWalkingKm} km</span>
             </div>
-            <span className="font-bold text-slate-100">{durations.workoutTimeMin}m</span>
+            <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+              <div
+                className="bg-emerald-400 h-full rounded-full transition-all"
+                style={{ width: `${Math.min(100, Math.round((activityAggregates.totalWalkingKm / activityAggregates.goals.walkingDistanceKmGoal) * 100))}%` }}
+              />
+            </div>
+            <div className="text-[9px] text-slate-500 flex justify-between">
+              <span>Goal: {activityAggregates.goals.walkingDistanceKmGoal}km</span>
+              <span>{Math.min(100, Math.round((activityAggregates.totalWalkingKm / activityAggregates.goals.walkingDistanceKmGoal) * 100))}%</span>
+            </div>
           </div>
 
-          <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Activity className="h-3.5 w-3.5 text-sky-400" />
-              <span className="text-slate-300 font-medium">Cardio Time</span>
+          {/* 2. Running KM */}
+          <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1.5">
+            <div className="flex items-center justify-between text-[10px] text-slate-400">
+              <span className="flex items-center gap-1 font-semibold uppercase"><Activity className="h-3 w-3 text-amber-400" /> Running</span>
+              <span className="font-bold text-slate-200">{activityAggregates.totalRunningKm} km</span>
             </div>
-            <span className="font-bold text-slate-100">{durations.cardioTimeMin}m</span>
+            <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+              <div
+                className="bg-amber-400 h-full rounded-full transition-all"
+                style={{ width: `${Math.min(100, Math.round((activityAggregates.totalRunningKm / activityAggregates.goals.runningDistanceKmGoal) * 100))}%` }}
+              />
+            </div>
+            <div className="text-[9px] text-slate-500 flex justify-between">
+              <span>Goal: {activityAggregates.goals.runningDistanceKmGoal}km</span>
+              <span>{Math.min(100, Math.round((activityAggregates.totalRunningKm / activityAggregates.goals.runningDistanceKmGoal) * 100))}%</span>
+            </div>
           </div>
 
-          <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Bike className="h-3.5 w-3.5 text-amber-400" />
-              <span className="text-slate-300 font-medium">Cycling Time</span>
+          {/* 3. Cycling KM */}
+          <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1.5">
+            <div className="flex items-center justify-between text-[10px] text-slate-400">
+              <span className="flex items-center gap-1 font-semibold uppercase"><Bike className="h-3 w-3 text-sky-400" /> Cycling</span>
+              <span className="font-bold text-slate-200">{activityAggregates.totalCyclingKm} km</span>
             </div>
-            <span className="font-bold text-slate-100">{durations.cyclingTimeMin}m</span>
+            <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+              <div
+                className="bg-sky-400 h-full rounded-full transition-all"
+                style={{ width: `${Math.min(100, Math.round((activityAggregates.totalCyclingKm / activityAggregates.goals.cyclingDistanceKmGoal) * 100))}%` }}
+              />
+            </div>
+            <div className="text-[9px] text-slate-500 flex justify-between">
+              <span>Goal: {activityAggregates.goals.cyclingDistanceKmGoal}km</span>
+              <span>{Math.min(100, Math.round((activityAggregates.totalCyclingKm / activityAggregates.goals.cyclingDistanceKmGoal) * 100))}%</span>
+            </div>
           </div>
 
-          <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Footprints className="h-3.5 w-3.5 text-emerald-400" />
-              <span className="text-slate-300 font-medium">Running Time</span>
+          {/* 4. Swimming KM */}
+          <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1.5">
+            <div className="flex items-center justify-between text-[10px] text-slate-400">
+              <span className="flex items-center gap-1 font-semibold uppercase"><Waves className="h-3 w-3 text-cyan-400" /> Swimming</span>
+              <span className="font-bold text-slate-200">{activityAggregates.totalSwimmingKm} km</span>
             </div>
-            <span className="font-bold text-slate-100">{durations.runningTimeMin}m</span>
+            <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+              <div
+                className="bg-cyan-400 h-full rounded-full transition-all"
+                style={{ width: `${Math.min(100, Math.round((activityAggregates.totalSwimmingKm / activityAggregates.goals.swimmingDistanceKmGoal) * 100))}%` }}
+              />
+            </div>
+            <div className="text-[9px] text-slate-500 flex justify-between">
+              <span>Goal: {activityAggregates.goals.swimmingDistanceKmGoal}km</span>
+              <span>{Math.min(100, Math.round((activityAggregates.totalSwimmingKm / activityAggregates.goals.swimmingDistanceKmGoal) * 100))}%</span>
+            </div>
           </div>
 
-          <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Timer className="h-3.5 w-3.5 text-teal-400" />
-              <span className="text-slate-300 font-medium">Treadmill Time</span>
+          {/* 5. Workout Time */}
+          <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1.5">
+            <div className="flex items-center justify-between text-[10px] text-slate-400">
+              <span className="flex items-center gap-1 font-semibold uppercase"><Timer className="h-3 w-3 text-purple-400" /> Workout Time</span>
+              <span className="font-bold text-slate-200">{activityAggregates.totalWorkoutTimeMin} m</span>
             </div>
-            <span className="font-bold text-slate-100">{durations.treadmillTimeMin}m</span>
+            <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+              <div
+                className="bg-purple-400 h-full rounded-full transition-all"
+                style={{ width: `${Math.min(100, Math.round((activityAggregates.totalWorkoutTimeMin / activityAggregates.goals.workoutDurationMinGoal) * 100))}%` }}
+              />
+            </div>
+            <div className="text-[9px] text-slate-500 flex justify-between">
+              <span>Goal: {activityAggregates.goals.workoutDurationMinGoal}m</span>
+              <span>{Math.min(100, Math.round((activityAggregates.totalWorkoutTimeMin / activityAggregates.goals.workoutDurationMinGoal) * 100))}%</span>
+            </div>
+          </div>
+
+          {/* 6. Calories Burned */}
+          <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1.5">
+            <div className="flex items-center justify-between text-[10px] text-slate-400">
+              <span className="flex items-center gap-1 font-semibold uppercase"><Flame className="h-3 w-3 text-rose-400" /> Calories Burned</span>
+              <span className="font-bold text-amber-400">{activityAggregates.totalCaloriesBurned} kcal</span>
+            </div>
+            <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+              <div
+                className="bg-amber-400 h-full rounded-full transition-all"
+                style={{ width: `${Math.min(100, Math.round((activityAggregates.totalCaloriesBurned / activityAggregates.goals.caloriesBurnedGoal) * 100))}%` }}
+              />
+            </div>
+            <div className="text-[9px] text-slate-500 flex justify-between">
+              <span>Goal: {activityAggregates.goals.caloriesBurnedGoal}</span>
+              <span>{Math.min(100, Math.round((activityAggregates.totalCaloriesBurned / activityAggregates.goals.caloriesBurnedGoal) * 100))}%</span>
+            </div>
+          </div>
+
+          {/* 7. Estimated Fat Burned */}
+          <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1.5">
+            <div className="flex items-center justify-between text-[10px] text-slate-400">
+              <span className="flex items-center gap-1 font-semibold uppercase"><TrendingDown className="h-3 w-3 text-emerald-400" /> Fat Burned</span>
+              <span className="font-bold text-emerald-400">{activityAggregates.estimatedFatBurnedGrams} g</span>
+            </div>
+            <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+              <div
+                className="bg-emerald-400 h-full rounded-full transition-all"
+                style={{ width: `${Math.min(100, Math.round((activityAggregates.estimatedFatBurnedGrams / 60) * 100))}%` }}
+              />
+            </div>
+            <div className="text-[9px] text-slate-500 flex justify-between">
+              <span>Lipid loss</span>
+              <span>Active burn</span>
+            </div>
+          </div>
+
+          {/* 8. Calories Consumed */}
+          <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1.5">
+            <div className="flex items-center justify-between text-[10px] text-slate-400">
+              <span className="flex items-center gap-1 font-semibold uppercase"><Flame className="h-3 w-3 text-sky-400" /> Consumed</span>
+              <span className="font-bold text-slate-200">{activityAggregates.caloriesConsumed} kcal</span>
+            </div>
+            <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+              <div
+                className="bg-sky-400 h-full rounded-full transition-all"
+                style={{ width: `${Math.min(100, Math.round((activityAggregates.caloriesConsumed / (healthMetrics.dailyCaloriesWeightLoss || 2100)) * 100))}%` }}
+              />
+            </div>
+            <div className="text-[9px] text-slate-500 flex justify-between">
+              <span>Target: {healthMetrics.dailyCaloriesWeightLoss || 2100}</span>
+              <span>{Math.round((activityAggregates.caloriesConsumed / (healthMetrics.dailyCaloriesWeightLoss || 2100)) * 100)}%</span>
+            </div>
+          </div>
+
+          {/* 9. Water Intake */}
+          <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1.5">
+            <div className="flex items-center justify-between text-[10px] text-slate-400">
+              <span className="flex items-center gap-1 font-semibold uppercase"><Droplets className="h-3 w-3 text-blue-400" /> Water Intake</span>
+              <span className="font-bold text-cyan-400">{activityAggregates.waterIntakeMl} ml</span>
+            </div>
+            <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+              <div
+                className="bg-blue-400 h-full rounded-full transition-all"
+                style={{ width: `${Math.min(100, Math.round((activityAggregates.waterIntakeMl / activityAggregates.goals.waterIntakeMlGoal) * 100))}%` }}
+              />
+            </div>
+            <div className="text-[9px] text-slate-500 flex justify-between">
+              <span>Goal: {activityAggregates.goals.waterIntakeMlGoal}ml</span>
+              <span>{Math.min(100, Math.round((activityAggregates.waterIntakeMl / activityAggregates.goals.waterIntakeMlGoal) * 100))}%</span>
+            </div>
+          </div>
+
+          {/* 10. Steps */}
+          <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1.5">
+            <div className="flex items-center justify-between text-[10px] text-slate-400">
+              <span className="flex items-center gap-1 font-semibold uppercase"><Footprints className="h-3 w-3 text-teal-400" /> Total Steps</span>
+              <span className="font-bold text-slate-200">{activityAggregates.totalSteps.toLocaleString()}</span>
+            </div>
+            <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+              <div
+                className="bg-teal-400 h-full rounded-full transition-all"
+                style={{ width: `${Math.min(100, Math.round((activityAggregates.totalSteps / activityAggregates.goals.dailyStepsGoal) * 100))}%` }}
+              />
+            </div>
+            <div className="text-[9px] text-slate-500 flex justify-between">
+              <span>Goal: {activityAggregates.goals.dailyStepsGoal.toLocaleString()}</span>
+              <span>{Math.min(100, Math.round((activityAggregates.totalSteps / activityAggregates.goals.dailyStepsGoal) * 100))}%</span>
+            </div>
           </div>
         </div>
       </div>

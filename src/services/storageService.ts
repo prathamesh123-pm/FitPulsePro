@@ -13,6 +13,9 @@ import {
   CoachWorkoutPlan,
   DailyNutritionLog,
   CustomFoodItem,
+  UserAccount,
+  DailyFitnessGoals,
+  HealthVitalsLog,
 } from "../types";
 import { syncAppStateToCloud } from "./firebase";
 import { DEFAULT_SAVED_DIET_PLANS } from "../data/defaultDietPlans";
@@ -26,7 +29,135 @@ import {
   DEFAULT_NOTIFICATIONS,
 } from "../data/defaultEnterpriseData";
 
-const STORAGE_KEY = "FITPULSE_APP_STATE_V1";
+const DEFAULT_STORAGE_KEY = "FITPULSE_APP_STATE_V1";
+
+export function getStorageKey(userId?: string): string {
+  if (userId && userId !== "guest" && userId !== "undefined") {
+    return `FITPULSE_USER_STATE_${userId}`;
+  }
+  return DEFAULT_STORAGE_KEY;
+}
+
+export function createInitialUserState(account?: UserAccount): AppState {
+  const userAcc = account || DEFAULT_USER_ACCOUNT;
+  return {
+    ...INITIAL_STATE,
+    profile: {
+      ...INITIAL_STATE.profile,
+      fullName: userAcc.displayName || "FitPulse Athlete",
+      email: userAcc.email || "athlete@fitpulse.app",
+    },
+    currentUserAccount: userAcc,
+    cloudUser: {
+      uid: userAcc.uid,
+      email: userAcc.email,
+      displayName: userAcc.displayName,
+      role: userAcc.role,
+    },
+    loginHistory: [],
+    auditLogs: [],
+    forms: [],
+    rateCharts: DEFAULT_RATE_CHARTS,
+    groupReports: [],
+    notifications: [],
+    notificationsEnabled: false,
+    formDrafts: {},
+    workoutHistory: [],
+    cardioSessions: [],
+    activeWorkout: null,
+    sync: {
+      isOnline: navigator.onLine,
+      lastSyncDate: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      syncStatus: "synced",
+      accountType: "Cloud Authenticated",
+      authProvider: "Email",
+    },
+  };
+}
+
+export function loadAppState(userId?: string): AppState {
+  try {
+    const key = getStorageKey(userId);
+    const serialized = localStorage.getItem(key) || (userId ? null : localStorage.getItem(DEFAULT_STORAGE_KEY));
+    if (serialized) {
+      const parsed = JSON.parse(serialized);
+      // Merge with initial state to ensure newly added properties exist
+      return {
+        ...INITIAL_STATE,
+        ...parsed,
+        profile: { ...INITIAL_STATE.profile, ...(parsed.profile || {}) },
+        currentUserAccount: parsed.currentUserAccount || DEFAULT_USER_ACCOUNT,
+        loginHistory: parsed.loginHistory || [],
+        auditLogs: parsed.auditLogs || [],
+        rateCharts: (parsed.rateCharts && parsed.rateCharts.length > 0) ? parsed.rateCharts : DEFAULT_RATE_CHARTS,
+        forms: parsed.forms || [],
+        groupReports: parsed.groupReports || [],
+        notifications: parsed.notifications || [],
+        notificationsEnabled: typeof parsed.notificationsEnabled === "boolean" ? parsed.notificationsEnabled : false,
+        formDrafts: parsed.formDrafts || {},
+        security: { ...INITIAL_STATE.security, ...(parsed.security || {}) },
+        membership: {
+          ...INITIAL_STATE.membership,
+          ...(parsed.membership || {}),
+          gymAddress: parsed.membership?.gymAddress || INITIAL_STATE.membership.gymAddress,
+          gymContactNumber: parsed.membership?.gymContactNumber || INITIAL_STATE.membership.gymContactNumber,
+          membershipType: parsed.membership?.membershipType || INITIAL_STATE.membership.membershipType || "Yearly",
+          amountPaid: typeof parsed.membership?.amountPaid === "number" ? parsed.membership.amountPaid : (parsed.membership?.fees || INITIAL_STATE.membership.fees),
+          remainingAmount: typeof parsed.membership?.remainingAmount === "number" ? parsed.membership.remainingAmount : 0,
+          paymentDate: parsed.membership?.paymentDate || parsed.membership?.startDate || INITIAL_STATE.membership.paymentDate,
+          notes: parsed.membership?.notes ?? INITIAL_STATE.membership.notes,
+        },
+        attendance: { ...INITIAL_STATE.attendance, ...(parsed.attendance || {}) },
+        achievements: parsed.achievements || INITIAL_STATE.achievements,
+        mistakes: parsed.mistakes || INITIAL_STATE.mistakes,
+        cardioSessions: parsed.cardioSessions || [],
+        customExercises: parsed.customExercises || [],
+        customFoods: (parsed.customFoods && parsed.customFoods.length > 0) ? parsed.customFoods : DEFAULT_CUSTOM_FOODS,
+        savedDietPlans: (parsed.savedDietPlans && parsed.savedDietPlans.length > 0) ? parsed.savedDietPlans : DEFAULT_SAVED_DIET_PLANS,
+        activeDietPlanId: parsed.activeDietPlanId || "plan-weight-loss",
+        workoutTemplates: (parsed.workoutTemplates && parsed.workoutTemplates.length > 0) ? parsed.workoutTemplates : INITIAL_STATE.workoutTemplates,
+        activityLogs: (parsed.activityLogs && parsed.activityLogs.length > 0) ? parsed.activityLogs : INITIAL_STATE.activityLogs,
+        fitnessGoals: parsed.fitnessGoals || DEFAULT_FITNESS_GOALS,
+        healthVitals: parsed.healthVitals || DEFAULT_HEALTH_VITALS,
+        dailyRoutines: { ...INITIAL_STATE.dailyRoutines, ...(parsed.dailyRoutines || {}) },
+        nightlyReports: { ...INITIAL_STATE.nightlyReports, ...(parsed.nightlyReports || {}) },
+      };
+    }
+  } catch (err) {
+    console.error("Failed to load app state:", err);
+  }
+  return INITIAL_STATE;
+}
+
+// Debounced background sync queue to protect Firestore write stream
+let cloudSyncTimer: any = null;
+
+export function queueCloudSync(userId: string, state: AppState): void {
+  if (cloudSyncTimer) {
+    clearTimeout(cloudSyncTimer);
+  }
+  cloudSyncTimer = setTimeout(() => {
+    if (userId && typeof navigator !== "undefined" && navigator.onLine) {
+      syncAppStateToCloud(userId, state).catch(() => {
+        // Silently handled for network/offline resilience
+      });
+    }
+  }, 2500); // 2.5s debounce buffer
+}
+
+export function saveAppState(state: AppState): void {
+  try {
+    const userId = state.cloudUser?.uid || state.currentUserAccount?.uid || "guest";
+    const key = getStorageKey(userId);
+    localStorage.setItem(key, JSON.stringify(state));
+    localStorage.setItem("FITPULSE_LAST_ACTIVE_UID", userId);
+
+    // Queue debounced background sync to avoid Firestore write-stream exhaustion
+    queueCloudSync(userId, state);
+  } catch (err) {
+    console.error("Failed to save app state:", err);
+  }
+}
 
 export const DEFAULT_CUSTOM_FOODS: CustomFoodItem[] = [
   {
@@ -644,6 +775,112 @@ export const DEFAULT_PROGRESS_PHOTOS: ProgressPhoto[] = [
 
 export const DEFAULT_COACH_PLANS: CoachWorkoutPlan[] = [
     {
+      id: "cp-today",
+      coachName: "Coach Marcus Vance (CSCS)",
+      planTitle: "Chest Hypertrophy & Upper Pec Accentuation",
+      workoutDate: new Date().toISOString().split("T")[0],
+      difficulty: "Advanced",
+      instructions: "Ensure a full 2-second pause at the bottom stretch on all dumbbell presses. Do not rush the eccentric phase.",
+      notes: "Aim for progressive overload on Set 3. Drink at least 1L during the session.",
+      status: "Assigned",
+      exercises: [
+        {
+          exerciseId: "chest-2",
+          exerciseName: "Incline Bench Press",
+          sets: 4,
+          reps: "8-10",
+          weightKg: 70,
+          restTimeSec: 90,
+          instructions: "Keep shoulder blades retracted and depressed.",
+          notes: "Target upper chest shelf.",
+        },
+        {
+          exerciseId: "chest-5",
+          exerciseName: "Cable Fly",
+          sets: 3,
+          reps: "12-15",
+          weightKg: 15,
+          restTimeSec: 60,
+          instructions: "Cross wrists slightly at peak contraction for max squeeze.",
+          notes: "Focus purely on pectoral pump.",
+        },
+        {
+          exerciseId: "triceps-1",
+          exerciseName: "Pushdown",
+          sets: 3,
+          reps: "12-15",
+          weightKg: 35,
+          restTimeSec: 60,
+          instructions: "Spread rope apart at the bottom.",
+          notes: "Lockout with strict elbow discipline.",
+        },
+      ],
+    },
+    {
+      id: "cp-upcoming-1",
+      coachName: "Coach Marcus Vance (CSCS)",
+      planTitle: "Pull Strength & Lat Expansion",
+      workoutDate: "2026-09-03",
+      difficulty: "Intermediate",
+      instructions: "Drive through elbows on rows. Keep spinal alignment neutral on deadlifts.",
+      notes: "Target 4 sets of 8 on Deadlifts at 130kg.",
+      status: "Assigned",
+      exercises: [
+        {
+          exerciseId: "back-1",
+          exerciseName: "Barbell Deadlift",
+          sets: 4,
+          reps: "6-8",
+          weightKg: 130,
+          restTimeSec: 120,
+          instructions: "Brace abdominal wall.",
+          notes: "Focus on hip hinge power.",
+        },
+        {
+          exerciseId: "back-2",
+          exerciseName: "Lat Pulldown",
+          sets: 4,
+          reps: "10-12",
+          weightKg: 65,
+          restTimeSec: 60,
+          instructions: "Squeeze lats at bottom.",
+          notes: "Controlled negative.",
+        },
+      ],
+    },
+    {
+      id: "cp-upcoming-2",
+      coachName: "Coach Marcus Vance (CSCS)",
+      planTitle: "Legs & Core Power Blaster",
+      workoutDate: "2026-09-05",
+      difficulty: "Advanced",
+      instructions: "Hit parallel depth on all back squats. Rest full 2 minutes between heavy sets.",
+      notes: "Progressive overload test day.",
+      status: "Assigned",
+      exercises: [
+        {
+          exerciseId: "legs-1",
+          exerciseName: "Barbell Back Squat",
+          sets: 5,
+          reps: "6-8",
+          weightKg: 110,
+          restTimeSec: 120,
+          instructions: "Chest up, drive knees outward.",
+          notes: "Heavy volume focus.",
+        },
+        {
+          exerciseId: "legs-2",
+          exerciseName: "Leg Press 45°",
+          sets: 4,
+          reps: "12",
+          weightKg: 190,
+          restTimeSec: 90,
+          instructions: "Full depth without pelvic tuck.",
+          notes: "Quad burn.",
+        },
+      ],
+    },
+    {
       id: "cp-1",
       coachName: "Coach Marcus Vance (CSCS)",
       planTitle: "Chest Hypertrophy & Upper Pec Accentuation",
@@ -747,42 +984,156 @@ export const DEFAULT_WORKOUT_TEMPLATES: WorkoutTemplate[] = [
   },
 ];
 
+export const DEFAULT_FITNESS_GOALS: DailyFitnessGoals = {
+  dailyStepsGoal: 10000,
+  walkingDistanceKmGoal: 5.0,
+  runningDistanceKmGoal: 5.0,
+  cyclingDistanceKmGoal: 15.0,
+  swimmingDistanceKmGoal: 1.0,
+  workoutDurationMinGoal: 60,
+  caloriesBurnedGoal: 550,
+  waterIntakeMlGoal: 3200,
+  weightLossTargetKg: 75.0,
+  fatLossTargetPct: 15.0,
+};
+
+export const DEFAULT_HEALTH_VITALS: Record<string, HealthVitalsLog> = {
+  "2026-08-28": {
+    date: "2026-08-28",
+    weightKg: 78.5,
+    bodyFatPct: 18.2,
+    bmi: 24.5,
+    waistCm: 84,
+    chestCm: 104,
+    hipCm: 98,
+    bloodPressureSystolic: 118,
+    bloodPressureDiastolic: 76,
+    bloodSugarMgDl: 92,
+    restingHeartRateBpm: 64,
+    sleepHours: 7.5,
+    notes: "Optimal resting HR; recovered well after morning brisk walking and resistance session.",
+  },
+};
+
 export const DEFAULT_ACTIVITY_LOGS: ActivityLog[] = [
   {
     id: "act-1",
     date: "2026-08-28",
     activityType: "Walking",
-    startTime: "07:15",
+    startTime: "07:00",
+    endTime: "07:45",
     durationMinutes: 45,
     distanceKm: 4.2,
+    steps: 5200,
     caloriesBurned: 210,
+    estimatedFatBurnedGrams: 27.3,
     avgSpeedKmh: 5.6,
+    paceMinPerKm: "10:43 /km",
     heartRateBpm: 112,
-    routeNotes: "Brisk morning neighbourhood park loop",
+    intensity: "Moderate",
+    routeNotes: "Brisk morning neighbourhood park loop with gentle hills",
+    createdAt: "2026-08-28T07:45:00.000Z",
   },
   {
     id: "act-2",
-    date: "2026-08-27",
-    activityType: "Cycling",
-    startTime: "18:00",
-    durationMinutes: 35,
-    distanceKm: 12.5,
-    caloriesBurned: 320,
-    avgSpeedKmh: 21.4,
-    heartRateBpm: 138,
-    routeNotes: "Outdoor riverside trail tempo ride",
+    date: "2026-08-28",
+    activityType: "Gym Workout",
+    startTime: "17:30",
+    endTime: "18:30",
+    durationMinutes: 60,
+    distanceKm: 0,
+    steps: 1850,
+    caloriesBurned: 420,
+    estimatedFatBurnedGrams: 54.5,
+    heartRateBpm: 142,
+    intensity: "High",
+    routeNotes: "Chest hypertrophy, bench press, incline dumbbells & cable pushdowns",
+    createdAt: "2026-08-28T18:30:00.000Z",
   },
   {
     id: "act-3",
+    date: "2026-08-27",
+    activityType: "Cycling",
+    startTime: "18:00",
+    endTime: "18:35",
+    durationMinutes: 35,
+    distanceKm: 12.5,
+    steps: 900,
+    caloriesBurned: 320,
+    estimatedFatBurnedGrams: 41.6,
+    avgSpeedKmh: 21.4,
+    heartRateBpm: 138,
+    intensity: "Moderate",
+    routeNotes: "Outdoor riverside trail tempo ride",
+    createdAt: "2026-08-27T18:35:00.000Z",
+  },
+  {
+    id: "act-4",
     date: "2026-08-26",
-    activityType: "Treadmill",
-    startTime: "18:45",
-    durationMinutes: 25,
-    distanceKm: 3.5,
-    caloriesBurned: 240,
-    avgSpeedKmh: 8.4,
-    heartRateBpm: 148,
-    routeNotes: "Post-lifting incline treadmill jog (3% incline)",
+    activityType: "Running",
+    startTime: "06:30",
+    endTime: "06:58",
+    durationMinutes: 28,
+    distanceKm: 5.0,
+    steps: 5800,
+    caloriesBurned: 350,
+    estimatedFatBurnedGrams: 45.5,
+    avgSpeedKmh: 10.7,
+    paceMinPerKm: "5:36 /km",
+    heartRateBpm: 154,
+    intensity: "High",
+    routeNotes: "5K morning endurance run on gravel track",
+    createdAt: "2026-08-26T06:58:00.000Z",
+  },
+  {
+    id: "act-5",
+    date: "2026-08-25",
+    activityType: "Swimming",
+    startTime: "19:00",
+    endTime: "19:30",
+    durationMinutes: 30,
+    distanceKm: 1.2,
+    steps: 0,
+    swimmingLaps: 24,
+    caloriesBurned: 280,
+    estimatedFatBurnedGrams: 36.4,
+    avgSpeedKmh: 2.4,
+    heartRateBpm: 136,
+    intensity: "Moderate",
+    routeNotes: "Freestyle laps & breaststroke recovery intervals",
+    createdAt: "2026-08-25T19:30:00.000Z",
+  },
+  {
+    id: "act-6",
+    date: "2026-08-24",
+    activityType: "Yoga",
+    startTime: "07:00",
+    endTime: "07:35",
+    durationMinutes: 35,
+    distanceKm: 0,
+    steps: 650,
+    caloriesBurned: 140,
+    estimatedFatBurnedGrams: 18.2,
+    heartRateBpm: 98,
+    intensity: "Low",
+    routeNotes: "Morning Vinyasa flow, hip openers & spinal mobilization",
+    createdAt: "2026-08-24T07:35:00.000Z",
+  },
+  {
+    id: "act-7",
+    date: "2026-08-23",
+    activityType: "Skipping Rope",
+    startTime: "17:15",
+    endTime: "17:30",
+    durationMinutes: 15,
+    distanceKm: 0,
+    steps: 1950,
+    caloriesBurned: 185,
+    estimatedFatBurnedGrams: 24.0,
+    heartRateBpm: 160,
+    intensity: "Vigorous",
+    routeNotes: "High-intensity jump rope intervals with double-unders",
+    createdAt: "2026-08-23T17:30:00.000Z",
   },
 ];
 
@@ -813,6 +1164,7 @@ export const INITIAL_STATE: AppState = {
   forms: DEFAULT_FORMS,
   groupReports: DEFAULT_GROUP_REPORTS,
   notifications: DEFAULT_NOTIFICATIONS,
+  notificationsEnabled: false,
   formDrafts: {},
   activeWorkout: null,
   workoutHistory: DEFAULT_WORKOUT_HISTORY,
@@ -853,6 +1205,8 @@ export const INITIAL_STATE: AppState = {
   activeDietPlanId: "plan-weight-loss",
   workoutTemplates: DEFAULT_WORKOUT_TEMPLATES,
   activityLogs: DEFAULT_ACTIVITY_LOGS,
+  fitnessGoals: DEFAULT_FITNESS_GOALS,
+  healthVitals: DEFAULT_HEALTH_VITALS,
   dailyRoutines: DEFAULT_DAILY_ROUTINES,
   nightlyReports: DEFAULT_NIGHTLY_REPORTS,
   security: {
@@ -871,71 +1225,6 @@ export const INITIAL_STATE: AppState = {
   },
   darkMode: true,
 };
-
-export function loadAppState(): AppState {
-  try {
-    const serialized = localStorage.getItem(STORAGE_KEY);
-    if (serialized) {
-      const parsed = JSON.parse(serialized);
-      // Merge with initial state to ensure newly added properties exist
-      return {
-        ...INITIAL_STATE,
-        ...parsed,
-        profile: { ...INITIAL_STATE.profile, ...(parsed.profile || {}) },
-        currentUserAccount: parsed.currentUserAccount || DEFAULT_USER_ACCOUNT,
-        loginHistory: (parsed.loginHistory && parsed.loginHistory.length > 0) ? parsed.loginHistory : DEFAULT_LOGIN_HISTORY,
-        auditLogs: (parsed.auditLogs && parsed.auditLogs.length > 0) ? parsed.auditLogs : DEFAULT_AUDIT_LOGS,
-        rateCharts: (parsed.rateCharts && parsed.rateCharts.length > 0) ? parsed.rateCharts : DEFAULT_RATE_CHARTS,
-        forms: (parsed.forms && parsed.forms.length > 0) ? parsed.forms : DEFAULT_FORMS,
-        groupReports: (parsed.groupReports && parsed.groupReports.length > 0) ? parsed.groupReports : DEFAULT_GROUP_REPORTS,
-        notifications: (parsed.notifications && parsed.notifications.length > 0) ? parsed.notifications : DEFAULT_NOTIFICATIONS,
-        formDrafts: parsed.formDrafts || {},
-        security: { ...INITIAL_STATE.security, ...(parsed.security || {}) },
-        membership: {
-          ...INITIAL_STATE.membership,
-          ...(parsed.membership || {}),
-          gymAddress: parsed.membership?.gymAddress || INITIAL_STATE.membership.gymAddress,
-          gymContactNumber: parsed.membership?.gymContactNumber || INITIAL_STATE.membership.gymContactNumber,
-          membershipType: parsed.membership?.membershipType || INITIAL_STATE.membership.membershipType || "Yearly",
-          amountPaid: typeof parsed.membership?.amountPaid === "number" ? parsed.membership.amountPaid : (parsed.membership?.fees || INITIAL_STATE.membership.fees),
-          remainingAmount: typeof parsed.membership?.remainingAmount === "number" ? parsed.membership.remainingAmount : 0,
-          paymentDate: parsed.membership?.paymentDate || parsed.membership?.startDate || INITIAL_STATE.membership.paymentDate,
-          notes: parsed.membership?.notes ?? INITIAL_STATE.membership.notes,
-        },
-        attendance: { ...INITIAL_STATE.attendance, ...(parsed.attendance || {}) },
-        achievements: (parsed.achievements && parsed.achievements.length > 0) ? parsed.achievements : INITIAL_STATE.achievements,
-        mistakes: (parsed.mistakes && parsed.mistakes.length > 0) ? parsed.mistakes : INITIAL_STATE.mistakes,
-        cardioSessions: (parsed.cardioSessions && parsed.cardioSessions.length > 0) ? parsed.cardioSessions : INITIAL_STATE.cardioSessions,
-        customExercises: parsed.customExercises || [],
-        customFoods: (parsed.customFoods && parsed.customFoods.length > 0) ? parsed.customFoods : DEFAULT_CUSTOM_FOODS,
-        savedDietPlans: (parsed.savedDietPlans && parsed.savedDietPlans.length > 0) ? parsed.savedDietPlans : DEFAULT_SAVED_DIET_PLANS,
-        activeDietPlanId: parsed.activeDietPlanId || "plan-weight-loss",
-        workoutTemplates: (parsed.workoutTemplates && parsed.workoutTemplates.length > 0) ? parsed.workoutTemplates : INITIAL_STATE.workoutTemplates,
-        activityLogs: (parsed.activityLogs && parsed.activityLogs.length > 0) ? parsed.activityLogs : INITIAL_STATE.activityLogs,
-        dailyRoutines: { ...INITIAL_STATE.dailyRoutines, ...(parsed.dailyRoutines || {}) },
-        nightlyReports: { ...INITIAL_STATE.nightlyReports, ...(parsed.nightlyReports || {}) },
-      };
-    }
-  } catch (err) {
-    console.error("Failed to load app state:", err);
-  }
-  return INITIAL_STATE;
-}
-
-export function saveAppState(state: AppState): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    // Asynchronously synchronize to Firestore if user is authenticated or guest
-    const userId = state.cloudUser?.uid || "guest";
-    if (userId) {
-      syncAppStateToCloud(userId, state).catch(() => {
-        // Offline resilience
-      });
-    }
-  } catch (err) {
-    console.error("Failed to save app state:", err);
-  }
-}
 
 export function exportAppStateJSON(state?: AppState): void {
   const currentState = state || loadAppState();

@@ -13,6 +13,7 @@ import {
   Timer,
   Globe,
   Bell,
+  BellOff,
   UserCheck,
 } from "lucide-react";
 import { UserProfile, CloudSyncState, GymMembership, UserRole } from "../types";
@@ -25,6 +26,8 @@ interface NavbarProps {
   darkMode: boolean;
   userRole?: UserRole;
   unreadNotificationsCount?: number;
+  notificationsEnabled?: boolean;
+  onToggleNotificationsEnabled?: () => void;
   onToggleDarkMode: () => void;
   onOpenProfile: () => void;
   onLockApp: () => void;
@@ -48,6 +51,8 @@ export function Navbar({
   darkMode,
   userRole = "Admin",
   unreadNotificationsCount = 0,
+  notificationsEnabled = false,
+  onToggleNotificationsEnabled,
   onToggleDarkMode,
   onOpenProfile,
   onLockApp,
@@ -105,13 +110,30 @@ export function Navbar({
           {onOpenNotifications && (
             <button
               onClick={onOpenNotifications}
-              className="relative flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-emerald-400 hover:border-slate-700 transition cursor-pointer shrink-0"
-              title="Enterprise Notifications"
+              className={`relative flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl border transition cursor-pointer shrink-0 ${
+                notificationsEnabled
+                  ? "bg-slate-900 border-slate-800 text-slate-300 hover:text-emerald-400 hover:border-slate-700"
+                  : "bg-slate-900/80 border-rose-500/30 text-rose-300/80 hover:text-rose-200 hover:border-rose-500/50"
+              }`}
+              title={
+                notificationsEnabled
+                  ? "Enterprise Notifications: Active"
+                  : "Enterprise Notifications: OFF (Muted) - Click to manage"
+              }
             >
-              <Bell className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-              {unreadNotificationsCount > 0 && (
+              {notificationsEnabled ? (
+                <Bell className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              ) : (
+                <BellOff className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-rose-400" />
+              )}
+              {notificationsEnabled && unreadNotificationsCount > 0 && (
                 <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-[9px] font-black text-slate-950">
                   {unreadNotificationsCount}
+                </span>
+              )}
+              {!notificationsEnabled && (
+                <span className="absolute -top-1 -right-1 flex h-3.5 px-1 items-center justify-center rounded-full bg-rose-500/90 text-[8px] font-extrabold text-white leading-none">
+                  OFF
                 </span>
               )}
             </button>

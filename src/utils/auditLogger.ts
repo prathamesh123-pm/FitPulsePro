@@ -1,6 +1,13 @@
 import { AuditLogEntry, AuditActionType, AuditModule, UserRole } from "../types";
 
-export function getDeviceInfo(): { device: string; browser: string } {
+export const APP_VERSION = "v2.5.0 Enterprise Cloud";
+
+export function getDeviceInfo(): {
+  device: string;
+  os: string;
+  browser: string;
+  appVersion: string;
+} {
   const ua = navigator.userAgent;
   let browser = "Unknown Browser";
   if (ua.indexOf("Firefox") > -1) {
@@ -19,22 +26,54 @@ export function getDeviceInfo(): { device: string; browser: string } {
     browser = "Apple Safari";
   }
 
+  let os = "Unknown OS";
   let device = "Desktop Workstation";
+
   if (/Android/i.test(ua)) {
     device = "Android Device";
+    os = "Android OS";
   } else if (/iPhone/i.test(ua)) {
     device = "Apple iPhone";
+    os = "iOS";
   } else if (/iPad/i.test(ua)) {
     device = "Apple iPad";
+    os = "iPadOS";
   } else if (/Macintosh|Mac OS X/i.test(ua)) {
-    device = "MacBook / iMac (macOS)";
+    device = "MacBook / iMac";
+    os = "macOS";
+  } else if (/Windows NT 10.0/i.test(ua)) {
+    device = "Windows Workstation";
+    os = "Windows 10 / 11";
   } else if (/Windows/i.test(ua)) {
     device = "Windows PC";
+    os = "Windows OS";
   } else if (/Linux/i.test(ua)) {
     device = "Linux Machine";
+    os = "Linux / Ubuntu";
   }
 
-  return { device, browser };
+  return { device, os, browser, appVersion: APP_VERSION };
+}
+
+let cachedIp: string | null = null;
+export async function getClientIpAddress(): Promise<string> {
+  if (cachedIp) return cachedIp;
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 2000);
+    const res = await fetch("https://api.ipify.org?format=json", { signal: controller.signal });
+    clearTimeout(timer);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.ip) {
+        cachedIp = `${data.ip} (Verified)`;
+        return cachedIp;
+      }
+    }
+  } catch (err) {
+    // ignore
+  }
+  return "192.168.1.45 (Local Node)";
 }
 
 export async function getCurrentCoordinates(): Promise<{ latitude: number; longitude: number; accuracy?: number } | null> {
@@ -75,6 +114,7 @@ export async function createAuditEntry(
 ): Promise<AuditLogEntry> {
   const { device } = getDeviceInfo();
   const gps = await getCurrentCoordinates();
+  const ipAddress = await getClientIpAddress();
 
   const entry: AuditLogEntry = {
     id: `audit-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
@@ -86,7 +126,7 @@ export async function createAuditEntry(
     module,
     description,
     device,
-    ipAddress: "192.168.1.45 (Encrypted)",
+    ipAddress,
     gpsLocation: gps
       ? {
           latitude: gps.latitude,

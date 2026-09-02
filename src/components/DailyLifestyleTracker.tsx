@@ -24,9 +24,11 @@ interface DailyLifestyleTrackerProps {
 export function DailyLifestyleTracker({
   dailyRoutines,
   onUpdateDailyRoutine,
-  initialDate = "2026-08-28",
+  initialDate,
 }: DailyLifestyleTrackerProps) {
-  const [selectedDate, setSelectedDate] = useState<string>(initialDate);
+  const realToday = new Date().toISOString().split("T")[0];
+  const defaultDate = initialDate || (dailyRoutines[realToday] ? realToday : (dailyRoutines["2026-08-28"] ? "2026-08-28" : realToday));
+  const [selectedDate, setSelectedDate] = useState<string>(defaultDate);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
   const currentRoutine: DailyRoutineLog = dailyRoutines[selectedDate] || {
