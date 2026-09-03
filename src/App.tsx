@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, lazy, Suspense, useRef, useCallback } from "react";
+import { useState, useMemo, useEffect, lazy, Suspense, useRef, useCallback, type ComponentType } from "react";
 import {
   TabId,
   AppState,
@@ -44,34 +44,52 @@ import { DashboardView } from "./components/DashboardView";
 import { EnterpriseDashboardView } from "./components/EnterpriseDashboardView";
 import { ToastNotificationContainer, NotificationDrawer } from "./components/NotificationsSystem";
 import { ViewSkeleton } from "./components/ViewSkeleton";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Language } from "./utils/i18n";
 import { Exercise, WorkoutTemplate, ActivityLog, DailyRoutineLog, AppNotification } from "./types";
 
+// Resilient code-splitting loader with automatic retry on temporary network/deployment hiccups
+function lazyWithRetry<T extends ComponentType<any>>(
+  factory: () => Promise<{ default: T }>
+) {
+  return lazy(() =>
+    factory().catch((error) => {
+      console.warn("[FitPulse] Chunk load failed, retrying once...", error);
+      return new Promise((resolve) => setTimeout(resolve, 800))
+        .then(factory)
+        .catch((err) => {
+          console.error("[FitPulse] Chunk failed to load after retry:", err);
+          throw err;
+        });
+    })
+  );
+}
+
 // Code-split heavy views & modals for instant initial startup & minimal memory footprint
-const WorkoutView = lazy(() => import("./components/WorkoutView").then(m => ({ default: m.WorkoutView })));
-const DietView = lazy(() => import("./components/DietView").then(m => ({ default: m.DietView })));
-const HealthBodyView = lazy(() => import("./components/HealthBodyView").then(m => ({ default: m.HealthBodyView })));
-const CoachGymView = lazy(() => import("./components/CoachGymView").then(m => ({ default: m.CoachGymView })));
-const ChecklistRemindersView = lazy(() => import("./components/ChecklistRemindersView").then(m => ({ default: m.ChecklistRemindersView })));
-const ReportsView = lazy(() => import("./components/ReportsView").then(m => ({ default: m.ReportsView })));
-const AILabView = lazy(() => import("./components/AILabView").then(m => ({ default: m.AILabView })));
-const FitnessCalculatorsView = lazy(() => import("./components/FitnessCalculatorsView").then(m => ({ default: m.FitnessCalculatorsView })));
-const ActivityTrackerView = lazy(() => import("./components/ActivityTrackerView").then(m => ({ default: m.ActivityTrackerView })));
-const DailyLifestyleTracker = lazy(() => import("./components/DailyLifestyleTracker").then(m => ({ default: m.DailyLifestyleTracker })));
-const EnterpriseRateChartsView = lazy(() => import("./components/EnterpriseRateChartsView").then(m => ({ default: m.EnterpriseRateChartsView })));
-const EnterpriseFormsView = lazy(() => import("./components/EnterpriseFormsView").then(m => ({ default: m.EnterpriseFormsView })));
-const EnterpriseGroupReportsView = lazy(() => import("./components/EnterpriseGroupReportsView").then(m => ({ default: m.EnterpriseGroupReportsView })));
-const UserManagementView = lazy(() => import("./components/UserManagementView").then(m => ({ default: m.UserManagementView })));
+const WorkoutView = lazyWithRetry(() => import("./components/WorkoutView").then(m => ({ default: m.WorkoutView })));
+const DietView = lazyWithRetry(() => import("./components/DietView").then(m => ({ default: m.DietView })));
+const HealthBodyView = lazyWithRetry(() => import("./components/HealthBodyView").then(m => ({ default: m.HealthBodyView })));
+const CoachGymView = lazyWithRetry(() => import("./components/CoachGymView").then(m => ({ default: m.CoachGymView })));
+const ChecklistRemindersView = lazyWithRetry(() => import("./components/ChecklistRemindersView").then(m => ({ default: m.ChecklistRemindersView })));
+const ReportsView = lazyWithRetry(() => import("./components/ReportsView").then(m => ({ default: m.ReportsView })));
+const AILabView = lazyWithRetry(() => import("./components/AILabView").then(m => ({ default: m.AILabView })));
+const FitnessCalculatorsView = lazyWithRetry(() => import("./components/FitnessCalculatorsView").then(m => ({ default: m.FitnessCalculatorsView })));
+const ActivityTrackerView = lazyWithRetry(() => import("./components/ActivityTrackerView").then(m => ({ default: m.ActivityTrackerView })));
+const DailyLifestyleTracker = lazyWithRetry(() => import("./components/DailyLifestyleTracker").then(m => ({ default: m.DailyLifestyleTracker })));
+const EnterpriseRateChartsView = lazyWithRetry(() => import("./components/EnterpriseRateChartsView").then(m => ({ default: m.EnterpriseRateChartsView })));
+const EnterpriseFormsView = lazyWithRetry(() => import("./components/EnterpriseFormsView").then(m => ({ default: m.EnterpriseFormsView })));
+const EnterpriseGroupReportsView = lazyWithRetry(() => import("./components/EnterpriseGroupReportsView").then(m => ({ default: m.EnterpriseGroupReportsView })));
+const UserManagementView = lazyWithRetry(() => import("./components/UserManagementView").then(m => ({ default: m.UserManagementView })));
 
 // Modals
-const SecurityProfileModal = lazy(() => import("./components/SecurityProfileModal").then(m => ({ default: m.SecurityProfileModal })));
-const CloudSyncModal = lazy(() => import("./components/CloudSyncModal").then(m => ({ default: m.CloudSyncModal })));
-const AchievementsModal = lazy(() => import("./components/AchievementsModal").then(m => ({ default: m.AchievementsModal })));
-const PlateCalculatorModal = lazy(() => import("./components/PlateCalculatorModal").then(m => ({ default: m.PlateCalculatorModal })));
-const PersonalRecordsModal = lazy(() => import("./components/PersonalRecordsModal").then(m => ({ default: m.PersonalRecordsModal })));
-const WaterTrackerModal = lazy(() => import("./components/WaterTrackerModal").then(m => ({ default: m.WaterTrackerModal })));
-const AudioCoachHUD = lazy(() => import("./components/AudioCoachHUD").then(m => ({ default: m.AudioCoachHUD })));
-const EnterpriseAuthModal = lazy(() => import("./components/EnterpriseAuthModal").then(m => ({ default: m.EnterpriseAuthModal })));
+const SecurityProfileModal = lazyWithRetry(() => import("./components/SecurityProfileModal").then(m => ({ default: m.SecurityProfileModal })));
+const CloudSyncModal = lazyWithRetry(() => import("./components/CloudSyncModal").then(m => ({ default: m.CloudSyncModal })));
+const AchievementsModal = lazyWithRetry(() => import("./components/AchievementsModal").then(m => ({ default: m.AchievementsModal })));
+const PlateCalculatorModal = lazyWithRetry(() => import("./components/PlateCalculatorModal").then(m => ({ default: m.PlateCalculatorModal })));
+const PersonalRecordsModal = lazyWithRetry(() => import("./components/PersonalRecordsModal").then(m => ({ default: m.PersonalRecordsModal })));
+const WaterTrackerModal = lazyWithRetry(() => import("./components/WaterTrackerModal").then(m => ({ default: m.WaterTrackerModal })));
+const AudioCoachHUD = lazyWithRetry(() => import("./components/AudioCoachHUD").then(m => ({ default: m.AudioCoachHUD })));
+const EnterpriseAuthModal = lazyWithRetry(() => import("./components/EnterpriseAuthModal").then(m => ({ default: m.EnterpriseAuthModal })));
 
 export default function App() {
   const [appState, setAppState] = useState<AppState>(() => loadAppState());
@@ -241,8 +259,12 @@ export default function App() {
     });
 
     // 2. Connection verification test and initial console synchronization
+    let isMounted = true;
+    let initialSyncTimer: any = null;
+
     if (db && navigator.onLine) {
-      const testConnectionAndSync = async () => {
+      initialSyncTimer = setTimeout(async () => {
+        if (!isMounted) return;
         try {
           await getDocFromServer(doc(db, "test", "connection"));
         } catch (error: any) {
@@ -253,21 +275,24 @@ export default function App() {
 
         // Ensure all local state data is synced to Firebase Console
         try {
-          const uid = appState.cloudUser?.uid || auth?.currentUser?.uid || "usr-admin-01";
-          await saveAllDataToFirebaseConsole(uid, appState);
-          setAppState((prev) => ({
-            ...prev,
-            sync: {
-              ...prev.sync,
-              syncStatus: "synced",
-              lastSyncDate: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-            },
-          }));
+          const uid = auth?.currentUser?.uid || appState.cloudUser?.uid || "usr-admin-01";
+          if (isMounted) {
+            await saveAllDataToFirebaseConsole(uid, appState);
+            if (isMounted) {
+              setAppState((prev) => ({
+                ...prev,
+                sync: {
+                  ...prev.sync,
+                  syncStatus: "synced",
+                  lastSyncDate: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                },
+              }));
+            }
+          }
         } catch (syncErr) {
           console.warn("Initial Firebase Console auto-save notice:", syncErr);
         }
-      };
-      testConnectionAndSync();
+      }, 1200);
     }
 
     // 3. Online/offline listener
@@ -290,7 +315,7 @@ export default function App() {
         sync: {
           ...prev.sync,
           isOnline: false,
-          syncStatus: "pending",
+          syncStatus: "offline",
         },
       }));
       handleNotify("Offline Mode", "Working offline. Changes will automatically sync when connection returns.", "warning", "Sync");
@@ -300,6 +325,8 @@ export default function App() {
     window.addEventListener("offline", handleOffline);
 
     return () => {
+      isMounted = false;
+      if (initialSyncTimer) clearTimeout(initialSyncTimer);
       unsubAuth();
       unsubAnnouncements?.();
       window.removeEventListener("online", handleOnline);
@@ -758,10 +785,11 @@ export default function App() {
           lang={lang}
         />
 
-        {/* Tab Content Switcher with Suspense Skeleton Loader */}
+        {/* Tab Content Switcher with Suspense Skeleton Loader & Localized Error Boundary */}
         <div className="mt-6">
-          <Suspense fallback={<ViewSkeleton />}>
-            {activeTab === "dashboard" && (
+          <ErrorBoundary fallbackTitle="View Display Notice (व्ह्यू लोड करताना त्रुटी आली)">
+            <Suspense fallback={<ViewSkeleton />}>
+              {activeTab === "dashboard" && (
               <div className="space-y-8">
                 <EnterpriseDashboardView
                   state={appState}
@@ -939,8 +967,9 @@ export default function App() {
               />
             )}
           </Suspense>
-        </div>
-      </main>
+        </ErrorBoundary>
+      </div>
+    </main>
 
       {/* Lazy-Loaded Modals with Suspense */}
       <Suspense fallback={null}>
@@ -992,7 +1021,7 @@ export default function App() {
           <PersonalRecordsModal
             isOpen={isPRModalOpen}
             onClose={() => setIsPRModalOpen(false)}
-            userBodyweightKg={appState.profile.weightKg}
+            userBodyweightKg={appState.profile.currentWeightKg || 70}
             lang={lang}
           />
         )}

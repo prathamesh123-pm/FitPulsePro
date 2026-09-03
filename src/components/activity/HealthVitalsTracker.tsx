@@ -14,7 +14,7 @@ import {
   Sun,
   Apple,
 } from "lucide-react";
-import { AppState, DailyNutritionLog, HealthVitalsLog } from "../../types";
+import { AppState, DailyNutritionLog, HealthVitalsLog, BodyMeasurement, MealLog, MealType } from "../../types";
 
 interface HealthVitalsTrackerProps {
   date: string;
@@ -122,21 +122,20 @@ export const HealthVitalsTracker: React.FC<HealthVitalsTrackerProps> = ({
       const newHealthVitals = { ...existingHealthVitals, [date]: updatedVitals };
 
       // Also append measurement entry if date doesn't exist
-      const existingMeasurements = prev.measurements || [];
+      const existingMeasurements: BodyMeasurement[] = prev.measurements || [];
       const hasDateMeasurement = existingMeasurements.some((m) => m.date === date);
-      const newMeasurements = hasDateMeasurement
+      const newMeasurements: BodyMeasurement[] = hasDateMeasurement
         ? existingMeasurements.map((m) =>
             m.date === date
               ? {
                   ...m,
                   weightKg,
-                  bodyFatPercentage: bodyFatPct,
+                  bodyFatPct,
                   waistCm,
                   chestCm,
                   hipCm,
-                  restingHeartRate,
-                  bloodPressure: `${bpSystolic}/${bpDiastolic}`,
-                  bloodSugarFasting: bloodSugar,
+                  bmi,
+                  notes: vitalsNotes || m.notes,
                 }
               : m
           )
@@ -146,13 +145,18 @@ export const HealthVitalsTracker: React.FC<HealthVitalsTrackerProps> = ({
               id: `meas-${date}`,
               date,
               weightKg,
-              bodyFatPercentage: bodyFatPct,
+              bodyFatPct,
               waistCm,
               chestCm,
               hipCm,
-              restingHeartRate,
-              bloodPressure: `${bpSystolic}/${bpDiastolic}`,
-              bloodSugarFasting: bloodSugar,
+              neckCm: 38,
+              shouldersCm: 110,
+              leftArmCm: 35,
+              rightArmCm: 35,
+              leftThighCm: 55,
+              rightThighCm: 55,
+              calvesCm: 38,
+              bmi,
               notes: vitalsNotes,
             },
           ];
@@ -174,7 +178,7 @@ export const HealthVitalsTracker: React.FC<HealthVitalsTrackerProps> = ({
   // Save Nutrition Tracking
   const handleSaveNutrition = () => {
     onUpdateState((prev) => {
-      const currentDayNutr = prev.dailyNutrition?.[date] || {
+      const currentDayNutr: DailyNutritionLog = prev.dailyNutrition?.[date] || {
         date,
         waterLoggedMl: waterMl,
         stepsCount: 0,
@@ -183,10 +187,10 @@ export const HealthVitalsTracker: React.FC<HealthVitalsTrackerProps> = ({
         meals: [],
       };
 
-      const updatedMeals = [
+      const updatedMeals: MealLog[] = [
         {
           id: `m-b-${date}`,
-          mealType: "Breakfast",
+          mealType: "Breakfast" as MealType,
           plannedTime: "08:15",
           actualTime: "08:30",
           completed: true,
@@ -208,7 +212,7 @@ export const HealthVitalsTracker: React.FC<HealthVitalsTrackerProps> = ({
         },
         {
           id: `m-l-${date}`,
-          mealType: "Lunch",
+          mealType: "Lunch" as MealType,
           plannedTime: "13:00",
           actualTime: "13:15",
           completed: true,
@@ -230,7 +234,7 @@ export const HealthVitalsTracker: React.FC<HealthVitalsTrackerProps> = ({
         },
         {
           id: `m-d-${date}`,
-          mealType: "Dinner",
+          mealType: "Dinner" as MealType,
           plannedTime: "20:00",
           actualTime: "20:30",
           completed: true,
@@ -252,7 +256,7 @@ export const HealthVitalsTracker: React.FC<HealthVitalsTrackerProps> = ({
         },
         {
           id: `m-s-${date}`,
-          mealType: "Evening Snack",
+          mealType: "Evening Snack" as MealType,
           plannedTime: "17:00",
           actualTime: "17:15",
           completed: true,

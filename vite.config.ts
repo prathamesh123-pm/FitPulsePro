@@ -21,22 +21,31 @@ export default defineConfig(() => {
         output: {
           manualChunks(id) {
             if (id.includes('node_modules')) {
-              if (id.includes('react') || id.includes('react-dom')) {
-                return 'vendor-react';
-              }
-              if (id.includes('recharts') || id.includes('d3')) {
-                return 'vendor-charts';
-              }
-              if (id.includes('firebase')) {
+              // Firebase packages
+              if (id.includes('/firebase/') || id.includes('/@firebase/')) {
                 return 'vendor-firebase';
               }
-              if (id.includes('jspdf') || id.includes('docx') || id.includes('canvas-confetti')) {
+              // PDF & Docx exports (heavy, only loaded when exporting)
+              if (id.includes('/jspdf/') || id.includes('/docx/') || id.includes('/canvas-confetti/')) {
                 return 'vendor-export-media';
               }
-              if (id.includes('lucide-react')) {
+              // Charts & visualization
+              if (id.includes('/recharts/') || id.includes('/d3-') || id.includes('/victory-')) {
+                return 'vendor-charts';
+              }
+              // Icons
+              if (id.includes('/lucide-react/')) {
                 return 'vendor-icons';
               }
-              return 'vendor-misc';
+              // Core React runtime & animation engine
+              if (
+                id.includes('/react/') ||
+                id.includes('/react-dom/') ||
+                id.includes('/scheduler/') ||
+                id.includes('/motion/')
+              ) {
+                return 'vendor-react';
+              }
             }
           },
         },

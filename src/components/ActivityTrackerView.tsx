@@ -91,9 +91,9 @@ export const ActivityTrackerView: React.FC<ActivityTrackerViewProps> = ({
       const auditEntry: AuditLogEntry = {
         id: `audit-${Date.now()}`,
         timestamp: new Date().toLocaleTimeString(),
-        userId: prev.currentUserAccount?.id || "user-1",
+        userId: prev.currentUserAccount?.uid || "usr-admin-01",
         userName: prev.profile.fullName || "User",
-        userRole: prev.currentUserAccount?.role || "Athlete",
+        userRole: prev.currentUserAccount?.role || "Staff",
         action: "Created",
         module: "Activity Tracker",
         description: `Logged ${newActivity.activityType} (${newActivity.durationMinutes}m, ${newActivity.caloriesBurned} kcal)`,

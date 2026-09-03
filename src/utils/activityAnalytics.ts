@@ -263,14 +263,27 @@ export function computeDailyActivityAggregates(
 /**
  * Generate AI Insights and Coaching Suggestions based on Aggregates
  */
-export function generateActivityAIInsights(aggregates: DailyActivityAggregates, targetCalories: number = 2200): {
+export function generateActivityAIInsights(
+  aggregates: DailyActivityAggregates,
+  targetCaloriesOrProfile: number | { targetCalories?: number; [key: string]: any } = 2200
+): {
   deficitOrSurplus: string;
   fatLossStatus: string;
   goalStatus: string;
   recommendedCalories: string;
   recommendedExercise: string;
   healthTips: string[];
+  summary: string;
+  calorieDeficitFeedback: string;
+  waterHydrationTip: string;
+  recommendedCalorieIntake: number;
+  recommendedExerciseMin: number;
 } {
+  const targetCalories =
+    typeof targetCaloriesOrProfile === "number"
+      ? targetCaloriesOrProfile
+      : targetCaloriesOrProfile?.targetCalories || 2200;
+
   const { caloriesConsumed, totalCaloriesBurned, netCalories, estimatedFatBurnedGrams, goalCompletionPct, waterIntakeMl, totalWorkoutTimeMin } = aggregates;
   
   const isDeficit = caloriesConsumed > 0 && netCalories < targetCalories;
@@ -322,6 +335,12 @@ export function generateActivityAIInsights(aggregates: DailyActivityAggregates, 
     healthTips.push("Resting heart rate indicates strong cardiovascular conditioning and parasympathetic recovery.");
   }
 
+  const summary = `${goalStatus} ${deficitOrSurplus}`;
+  const calorieDeficitFeedback = deficitOrSurplus;
+  const waterHydrationTip = healthTips[0] || "Hydration balance is maintained.";
+  const recommendedCalorieIntake = targetCalories;
+  const recommendedExerciseMin = totalWorkoutTimeMin < 45 ? 60 : 45;
+
   return {
     deficitOrSurplus,
     fatLossStatus,
@@ -329,6 +348,11 @@ export function generateActivityAIInsights(aggregates: DailyActivityAggregates, 
     recommendedCalories,
     recommendedExercise,
     healthTips,
+    summary,
+    calorieDeficitFeedback,
+    waterHydrationTip,
+    recommendedCalorieIntake,
+    recommendedExerciseMin,
   };
 }
 

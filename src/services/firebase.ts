@@ -48,23 +48,40 @@ import {
   BroadcastAnnouncement,
 } from "../types";
 
+// Safe configuration resolution supporting both firebase-applet-config.json AND VITE_ environment variables
+const metaEnv = typeof import.meta !== "undefined" ? (import.meta as any).env : {};
+
+const resolvedFirebaseConfig = {
+  apiKey: metaEnv?.VITE_FIREBASE_API_KEY || firebaseConfig?.apiKey || "",
+  authDomain: metaEnv?.VITE_FIREBASE_AUTH_DOMAIN || firebaseConfig?.authDomain || "",
+  projectId: metaEnv?.VITE_FIREBASE_PROJECT_ID || firebaseConfig?.projectId || "",
+  storageBucket: metaEnv?.VITE_FIREBASE_STORAGE_BUCKET || firebaseConfig?.storageBucket || "",
+  messagingSenderId: metaEnv?.VITE_FIREBASE_MESSAGING_SENDER_ID || firebaseConfig?.messagingSenderId || "",
+  appId: metaEnv?.VITE_FIREBASE_APP_ID || firebaseConfig?.appId || "",
+  firestoreDatabaseId: metaEnv?.VITE_FIREBASE_DATABASE_ID || firebaseConfig?.firestoreDatabaseId || "",
+};
+
 let app: any = null;
 let db: Firestore | null = null;
 let auth: any = null;
 
 try {
-  if (firebaseConfig && firebaseConfig.apiKey) {
-    app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-    db = firebaseConfig.firestoreDatabaseId
-      ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
+  if (resolvedFirebaseConfig && resolvedFirebaseConfig.apiKey) {
+    app = getApps().length === 0 ? initializeApp(resolvedFirebaseConfig) : getApp();
+    db = resolvedFirebaseConfig.firestoreDatabaseId && resolvedFirebaseConfig.firestoreDatabaseId !== "(default)"
+      ? getFirestore(app, resolvedFirebaseConfig.firestoreDatabaseId)
       : getFirestore(app);
     auth = getAuth(app);
   }
 } catch (error) {
-  console.warn("Firebase initialization warning (will use local fallback):", error);
+  console.warn("[FitPulse Firebase Initialization] Operating in offline/local state mode:", error);
 }
 
 export { app, db, auth };
+
+export function isFirebaseAvailable(): boolean {
+  return Boolean(app && db && auth);
+}
 
 export enum OperationType {
   CREATE = "create",

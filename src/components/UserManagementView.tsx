@@ -213,7 +213,7 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
   };
 
   const handleToggleUserStatus = async (user: UserAccount) => {
-    const nextStatus = user.status === "Active" ? "Disabled" : "Active";
+    const nextStatus: "Active" | "Disabled" = user.status === "Active" ? "Disabled" : "Active";
     const res = await updateUserStatusInCloud(user.uid, nextStatus);
 
     if (res.success) {
@@ -566,7 +566,9 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
                             <div className="font-bold text-white flex items-center gap-1.5">
                               <span className="truncate">{user.displayName}</span>
                               {user.emailVerified && (
-                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" title="Email Verified" />
+                                <span title="Email Verified">
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                                </span>
                               )}
                             </div>
                             <div className="text-[11px] text-slate-400 font-mono truncate">UID: {user.uid.substring(0, 12)}...</div>
