@@ -15,6 +15,7 @@ import {
   Bell,
   BellOff,
   UserCheck,
+  LogOut,
 } from "lucide-react";
 import { UserProfile, CloudSyncState, GymMembership, UserRole } from "../types";
 import { Language, TRANSLATIONS } from "../utils/i18n";
@@ -40,6 +41,7 @@ interface NavbarProps {
   onOpenAudioCoach?: () => void;
   onOpenEnterpriseAuth?: () => void;
   onOpenNotifications?: () => void;
+  onLogout?: () => void;
   lang?: Language;
   onToggleLanguage?: () => void;
 }
@@ -65,6 +67,7 @@ export function Navbar({
   onOpenAudioCoach,
   onOpenEnterpriseAuth,
   onOpenNotifications,
+  onLogout,
   lang = "en",
   onToggleLanguage,
 }: NavbarProps) {
@@ -283,6 +286,17 @@ export function Navbar({
               {profile.fullName.split(" ")[0]}
             </span>
           </button>
+
+          {/* Logout Quick Button */}
+          {onLogout && (
+            <button
+              onClick={onLogout}
+              className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-rose-400 hover:border-rose-500/30 transition cursor-pointer shrink-0"
+              title={lang === "mr" ? "लॉगआउट करा" : "Logout of Account"}
+            >
+              <LogOut className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+            </button>
+          )}
         </div>
       </div>
     </header>

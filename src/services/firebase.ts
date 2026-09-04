@@ -14,6 +14,7 @@ import {
   orderBy,
   limit,
   writeBatch,
+  enableIndexedDbPersistence,
 } from "firebase/firestore";
 import {
   getAuth,
@@ -39,6 +40,7 @@ import {
   AppState,
   CustomFoodItem,
   UserAccount,
+  UserRole,
   LoginHistoryRecord,
   AuditLogEntry,
   EnterpriseRateChart,
@@ -46,19 +48,92 @@ import {
   GroupProgressReport,
   UserProfile,
   BroadcastAnnouncement,
+  Product,
+  CalorieLogEntry,
+  AppSettings,
+  GeneratedDietPlan,
+  Exercise,
+  BodyMeasurement,
 } from "../types";
 
-// Safe configuration resolution supporting both firebase-applet-config.json AND VITE_ environment variables
+// Safe configuration resolution supporting firebase-applet-config.json, .env (FIREBASE_*), and VITE_ env variables
 const metaEnv = typeof import.meta !== "undefined" ? (import.meta as any).env : {};
+const procEnv = typeof process !== "undefined" && (process as any)?.env ? (process as any).env : {};
 
-const resolvedFirebaseConfig = {
-  apiKey: metaEnv?.VITE_FIREBASE_API_KEY || firebaseConfig?.apiKey || "",
-  authDomain: metaEnv?.VITE_FIREBASE_AUTH_DOMAIN || firebaseConfig?.authDomain || "",
-  projectId: metaEnv?.VITE_FIREBASE_PROJECT_ID || firebaseConfig?.projectId || "",
-  storageBucket: metaEnv?.VITE_FIREBASE_STORAGE_BUCKET || firebaseConfig?.storageBucket || "",
-  messagingSenderId: metaEnv?.VITE_FIREBASE_MESSAGING_SENDER_ID || firebaseConfig?.messagingSenderId || "",
-  appId: metaEnv?.VITE_FIREBASE_APP_ID || firebaseConfig?.appId || "",
-  firestoreDatabaseId: metaEnv?.VITE_FIREBASE_DATABASE_ID || firebaseConfig?.firestoreDatabaseId || "",
+/**
+ * Filter out common placeholder strings (like "API Key", "Project ID", etc.)
+ * that may be injected into environment variables, falling back to valid project defaults.
+ */
+function cleanFirebaseConfigValue(envVal: unknown, fallbackVal: string, isApiKey = false): string {
+  const isDummyPlaceholder = (val: string): boolean => {
+    const v = val.trim().toLowerCase();
+    return (
+      v === "api key" ||
+      v === "auth domain" ||
+      v === "project id" ||
+      v === "storage bucket" ||
+      v === "messaging sender id" ||
+      v === "app id" ||
+      v === "realtime database url" ||
+      v.includes("your-") ||
+      v.includes("placeholder") ||
+      v === "undefined" ||
+      v === "null" ||
+      v === ""
+    );
+  };
+
+  // 1. Try env variable first if valid
+  if (typeof envVal === "string" && envVal.trim()) {
+    const trimmed = envVal.trim();
+    if (!isDummyPlaceholder(trimmed)) {
+      if (!isApiKey || trimmed.startsWith("AIzaSy")) {
+        return trimmed;
+      }
+    }
+  }
+
+  // 2. Fall back to configuration file value
+  if (typeof fallbackVal === "string" && fallbackVal.trim()) {
+    const trimmed = fallbackVal.trim();
+    if (!isDummyPlaceholder(trimmed)) {
+      return trimmed;
+    }
+  }
+
+  return "";
+}
+
+export const resolvedFirebaseConfig = {
+  apiKey: cleanFirebaseConfigValue(
+    metaEnv?.VITE_FIREBASE_API_KEY || metaEnv?.FIREBASE_API_KEY || procEnv?.FIREBASE_API_KEY,
+    firebaseConfig?.apiKey || "AIzaSyA6S_WpZXTq1l__v2l36aEqyhjK6ZlPrYE",
+    true
+  ),
+  authDomain: cleanFirebaseConfigValue(
+    metaEnv?.VITE_FIREBASE_AUTH_DOMAIN || metaEnv?.FIREBASE_AUTH_DOMAIN || procEnv?.FIREBASE_AUTH_DOMAIN,
+    firebaseConfig?.authDomain || "emergent-horizon-ct3g1.firebaseapp.com"
+  ),
+  projectId: cleanFirebaseConfigValue(
+    metaEnv?.VITE_FIREBASE_PROJECT_ID || metaEnv?.FIREBASE_PROJECT_ID || procEnv?.FIREBASE_PROJECT_ID,
+    firebaseConfig?.projectId || "emergent-horizon-ct3g1"
+  ),
+  storageBucket: cleanFirebaseConfigValue(
+    metaEnv?.VITE_FIREBASE_STORAGE_BUCKET || metaEnv?.FIREBASE_STORAGE_BUCKET || procEnv?.FIREBASE_STORAGE_BUCKET,
+    firebaseConfig?.storageBucket || "emergent-horizon-ct3g1.firebasestorage.app"
+  ),
+  messagingSenderId: cleanFirebaseConfigValue(
+    metaEnv?.VITE_FIREBASE_MESSAGING_SENDER_ID || metaEnv?.FIREBASE_MESSAGING_SENDER_ID || procEnv?.FIREBASE_MESSAGING_SENDER_ID,
+    firebaseConfig?.messagingSenderId || "346873415158"
+  ),
+  appId: cleanFirebaseConfigValue(
+    metaEnv?.VITE_FIREBASE_APP_ID || metaEnv?.FIREBASE_APP_ID || procEnv?.FIREBASE_APP_ID,
+    firebaseConfig?.appId || "1:346873415158:web:55cbb97424f43070e233d7"
+  ),
+  firestoreDatabaseId: cleanFirebaseConfigValue(
+    metaEnv?.VITE_FIREBASE_DATABASE_ID || procEnv?.VITE_FIREBASE_DATABASE_ID,
+    firebaseConfig?.firestoreDatabaseId || "ai-studio-personalfitnessm-dab4e4d4-3a3e-4dcd-aa9c-c428b99feb7b"
+  ),
 };
 
 let app: any = null;
@@ -67,14 +142,42 @@ let auth: any = null;
 
 try {
   if (resolvedFirebaseConfig && resolvedFirebaseConfig.apiKey) {
-    app = getApps().length === 0 ? initializeApp(resolvedFirebaseConfig) : getApp();
+    // Prevent duplicate Firebase initialization
+    const activeApps = getApps();
+    app = activeApps.length > 0 ? activeApps[0] : initializeApp(resolvedFirebaseConfig);
+
     db = resolvedFirebaseConfig.firestoreDatabaseId && resolvedFirebaseConfig.firestoreDatabaseId !== "(default)"
       ? getFirestore(app, resolvedFirebaseConfig.firestoreDatabaseId)
       : getFirestore(app);
     auth = getAuth(app);
+
+    // Enable Offline Persistence for zero data loss on refresh/offline
+    if (db && typeof window !== "undefined") {
+      enableIndexedDbPersistence(db).catch((err: any) => {
+        if (err.code === "failed-precondition") {
+          console.warn("[Firestore] Offline persistence skipped: Multiple tabs active");
+        } else if (err.code === "unimplemented") {
+          console.warn("[Firestore] Offline persistence not supported in this browser");
+        }
+      });
+    }
   }
 } catch (error) {
   console.warn("[FitPulse Firebase Initialization] Operating in offline/local state mode:", error);
+}
+
+export function getFirebaseDiagnostics() {
+  return {
+    isInitialized: Boolean(app && db && auth),
+    apiKey: resolvedFirebaseConfig.apiKey ? `${resolvedFirebaseConfig.apiKey.slice(0, 8)}...${resolvedFirebaseConfig.apiKey.slice(-4)}` : "missing",
+    isApiKeyValid: Boolean(resolvedFirebaseConfig.apiKey && resolvedFirebaseConfig.apiKey.startsWith("AIzaSy")),
+    projectId: resolvedFirebaseConfig.projectId,
+    authDomain: resolvedFirebaseConfig.authDomain,
+    storageBucket: resolvedFirebaseConfig.storageBucket,
+    messagingSenderId: resolvedFirebaseConfig.messagingSenderId,
+    appId: resolvedFirebaseConfig.appId,
+    firestoreDatabaseId: resolvedFirebaseConfig.firestoreDatabaseId,
+  };
 }
 
 export { app, db, auth };
@@ -129,6 +232,11 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   };
   console.error("Firestore Error: ", JSON.stringify(errInfo));
   throw new Error(JSON.stringify(errInfo));
+}
+
+export function isAllowedUnauthenticatedId(userId?: string | null): boolean {
+  if (!userId) return false;
+  return ["guest", "default-athlete", "user_local", "usr-admin-01"].includes(userId);
 }
 
 function resolveUserId(userId?: string): string {
@@ -214,7 +322,7 @@ export async function signUpWithEmail(
   email: string,
   pass: string,
   displayName: string,
-  role: "Admin" | "Manager" | "Staff" = "Staff",
+  role: UserRole = "Staff",
   extraDetails?: {
     mobileNumber?: string;
     companyName?: string;
@@ -499,6 +607,8 @@ export async function deleteUserAccountAndCloudData(userId: string): Promise<{ s
   }
 }
 
+export const deleteUserAccount = deleteUserAccountAndCloudData;
+
 /**
  * Sign In with Google Popup
  */
@@ -666,7 +776,7 @@ export async function fetchAllUsersFromCloud(): Promise<UserAccount[]> {
 export async function updateUserStatusInCloud(
   userId: string,
   status?: "Active" | "Pending" | "Disabled" | "Suspended",
-  role?: "Admin" | "Manager" | "Staff"
+  role?: UserRole
 ): Promise<{ success: boolean; error?: string }> {
   if (!db) return { success: true };
   const effectiveUserId = resolveUserId(userId);
@@ -1230,6 +1340,11 @@ export async function syncAppStateToCloud(
   const effectiveUserId = resolveUserId(userId);
   if (!effectiveUserId) return { success: false, error: "Invalid user ID" };
 
+  const currentUid = auth?.currentUser?.uid;
+  if (!currentUid && !isAllowedUnauthenticatedId(effectiveUserId)) {
+    return { success: false, error: "Authentication required to sync to cloud" };
+  }
+
   // If another sync is actively in progress, queue this latest one to run right after
   if (isSyncInFlight) {
     return new Promise((resolve) => {
@@ -1319,6 +1434,11 @@ export async function fetchAppStateFromCloud(
   }
 
   const effectiveUserId = resolveUserId(userId);
+  const currentUid = auth?.currentUser?.uid;
+  if (!currentUid && !isAllowedUnauthenticatedId(effectiveUserId)) {
+    return { success: false, error: "Authentication required to fetch cloud backup" };
+  }
+
   const path = `users/${effectiveUserId}/fitnessData/currentState`;
   try {
     const userDocRef = doc(db, "users", effectiveUserId, "fitnessData", "currentState");
@@ -1332,7 +1452,8 @@ export async function fetchAppStateFromCloud(
     return { success: false, error: "No cloud backup found for this account" };
   } catch (err: any) {
     if (err?.code === "permission-denied" || err?.message?.includes("Missing or insufficient permissions")) {
-      handleFirestoreError(err, OperationType.GET, path);
+      console.warn(`[Firestore Fetch] Permission denied for path ${path}. Auth user: ${auth?.currentUser?.uid || "none"}`);
+      return { success: false, error: "Missing or insufficient permissions to fetch cloud backup" };
     }
     console.error("Firestore fetch error:", err);
     return { success: false, error: err?.message || "Failed to fetch cloud backup" };
@@ -1349,6 +1470,14 @@ export function subscribeToCloudChanges(
   if (!db) return () => {};
 
   const effectiveUserId = resolveUserId(userId);
+  const currentUid = auth?.currentUser?.uid;
+  if (!currentUid && !isAllowedUnauthenticatedId(effectiveUserId)) {
+    return () => {};
+  }
+  if (currentUid && currentUid !== effectiveUserId && !isAllowedUnauthenticatedId(effectiveUserId)) {
+    return () => {};
+  }
+
   const path = `users/${effectiveUserId}/fitnessData/currentState`;
   try {
     const userDocRef = doc(db, "users", effectiveUserId, "fitnessData", "currentState");
@@ -1364,7 +1493,8 @@ export function subscribeToCloudChanges(
       },
       (error) => {
         if (error?.code === "permission-denied" || error?.message?.includes("Missing or insufficient permissions")) {
-          handleFirestoreError(error, OperationType.GET, path);
+          console.warn(`[Firestore Subscription] Permission denied for path ${path}. Auth user: ${auth?.currentUser?.uid || "none"}`);
+          return;
         }
         console.warn("Firestore real-time subscription error:", error);
       }
@@ -1473,6 +1603,12 @@ export async function saveAllDataToFirebaseConsole(
   const effectiveUserId = resolveUserId(userId);
   if (!effectiveUserId) {
     result.error = "Invalid User ID for Firebase Console save.";
+    return result;
+  }
+
+  const currentUid = auth?.currentUser?.uid;
+  if (!currentUid && !isAllowedUnauthenticatedId(effectiveUserId)) {
+    result.error = "Authentication required to save data to cloud.";
     return result;
   }
 
@@ -1762,5 +1898,305 @@ export async function saveAllDataToFirebaseConsole(
     result.error = err?.message || "सर्व डेटा सेव्ह करताना त्रुटी आली.";
     return result;
   }
+}
+
+// ==========================================
+// USER MANAGEMENT CLOUD OPERATIONS
+// ==========================================
+
+export async function deleteUserFromCloud(userId: string): Promise<{ success: boolean; error?: string }> {
+  if (!db) return { success: false, error: "Database not connected" };
+  try {
+    // Delete from allUsers
+    await deleteDoc(doc(db, "allUsers", userId)).catch(() => {});
+    // Delete user account doc
+    await deleteDoc(doc(db, "users", userId, "account", "main")).catch(() => {});
+    // Delete user profile doc
+    await deleteDoc(doc(db, "users", userId)).catch(() => {});
+    invalidateCachePattern("allUsers");
+    return { success: true };
+  } catch (err: any) {
+    console.error("deleteUserFromCloud error:", err);
+    return { success: false, error: err.message || "Failed to delete user" };
+  }
+}
+
+// ==========================================
+// PRODUCT MANAGEMENT CLOUD OPERATIONS
+// ==========================================
+
+export async function saveProductToCloud(product: Product): Promise<{ success: boolean; error?: string }> {
+  if (!db) return { success: false, error: "Database not connected" };
+  try {
+    const id = product.id || `prod-${Date.now()}`;
+    const productData = {
+      ...product,
+      id,
+      updatedAt: new Date().toISOString(),
+    };
+    await setDoc(doc(db, "products", id), sanitizeForFirestore(productData), { merge: true });
+    invalidateCachePattern("products");
+    return { success: true };
+  } catch (err: any) {
+    console.error("saveProductToCloud error:", err);
+    if (err?.code === "permission-denied" || err?.message?.includes("Missing or insufficient permissions")) {
+      handleFirestoreError(err, OperationType.WRITE, `products/${product.id}`);
+    }
+    return { success: false, error: err.message || "Failed to save product" };
+  }
+}
+
+export async function fetchProductsFromCloud(): Promise<Product[]> {
+  if (!db) return [];
+  return dedupeFetch("products", async () => {
+    try {
+      const snap = await getDocs(collection(db!, "products"));
+      const list: Product[] = [];
+      snap.forEach((d) => {
+        list.push(d.data() as Product);
+      });
+      return list.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+    } catch (err: any) {
+      console.warn("fetchProductsFromCloud warn:", err);
+      return [];
+    }
+  }, 10000);
+}
+
+export async function deleteProductFromCloud(productId: string): Promise<{ success: boolean; error?: string }> {
+  if (!db) return { success: false, error: "Database not connected" };
+  try {
+    await deleteDoc(doc(db, "products", productId));
+    invalidateCachePattern("products");
+    return { success: true };
+  } catch (err: any) {
+    console.error("deleteProductFromCloud error:", err);
+    return { success: false, error: err.message || "Failed to delete product" };
+  }
+}
+
+// ==========================================
+// EXERCISE DATABASE CLOUD OPERATIONS
+// ==========================================
+
+export async function saveExerciseToCloud(exercise: Exercise): Promise<{ success: boolean; error?: string }> {
+  if (!db) return { success: false, error: "Database not connected" };
+  try {
+    const id = exercise.id || `ex-${Date.now()}`;
+    const data = { ...exercise, id };
+    await setDoc(doc(db, "exercises", id), sanitizeForFirestore(data), { merge: true });
+    invalidateCachePattern("exercises");
+    return { success: true };
+  } catch (err: any) {
+    console.error("saveExerciseToCloud error:", err);
+    return { success: false, error: err.message || "Failed to save exercise" };
+  }
+}
+
+export async function fetchExercisesFromCloud(): Promise<Exercise[]> {
+  if (!db) return [];
+  return dedupeFetch("exercises", async () => {
+    try {
+      const snap = await getDocs(collection(db!, "exercises"));
+      const list: Exercise[] = [];
+      snap.forEach((d) => {
+        list.push(d.data() as Exercise);
+      });
+      return list;
+    } catch (err: any) {
+      console.warn("fetchExercisesFromCloud warn:", err);
+      return [];
+    }
+  }, 15000);
+}
+
+export async function deleteExerciseFromCloud(exerciseId: string): Promise<{ success: boolean; error?: string }> {
+  if (!db) return { success: false, error: "Database not connected" };
+  try {
+    await deleteDoc(doc(db, "exercises", exerciseId));
+    invalidateCachePattern("exercises");
+    return { success: true };
+  } catch (err: any) {
+    console.error("deleteExerciseFromCloud error:", err);
+    return { success: false, error: err.message || "Failed to delete exercise" };
+  }
+}
+
+// ==========================================
+// DIET PLAN CLOUD OPERATIONS
+// ==========================================
+
+export async function saveDietPlanToCloud(dietPlan: GeneratedDietPlan): Promise<{ success: boolean; error?: string }> {
+  if (!db) return { success: false, error: "Database not connected" };
+  try {
+    const id = dietPlan.id || `dp-${Date.now()}`;
+    const data = { ...dietPlan, id };
+    await setDoc(doc(db, "dietPlans", id), sanitizeForFirestore(data), { merge: true });
+    invalidateCachePattern("dietPlans");
+    return { success: true };
+  } catch (err: any) {
+    console.error("saveDietPlanToCloud error:", err);
+    return { success: false, error: err.message || "Failed to save diet plan" };
+  }
+}
+
+export async function fetchDietPlansFromCloud(): Promise<GeneratedDietPlan[]> {
+  if (!db) return [];
+  return dedupeFetch("dietPlans", async () => {
+    try {
+      const snap = await getDocs(collection(db!, "dietPlans"));
+      const list: GeneratedDietPlan[] = [];
+      snap.forEach((d) => {
+        list.push(d.data() as GeneratedDietPlan);
+      });
+      return list.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+    } catch (err: any) {
+      console.warn("fetchDietPlansFromCloud warn:", err);
+      return [];
+    }
+  }, 15000);
+}
+
+export async function deleteDietPlanFromCloud(dietPlanId: string): Promise<{ success: boolean; error?: string }> {
+  if (!db) return { success: false, error: "Database not connected" };
+  try {
+    await deleteDoc(doc(db, "dietPlans", dietPlanId));
+    invalidateCachePattern("dietPlans");
+    return { success: true };
+  } catch (err: any) {
+    console.error("deleteDietPlanFromCloud error:", err);
+    return { success: false, error: err.message || "Failed to delete diet plan" };
+  }
+}
+
+// ==========================================
+// CALORIE TRACKER CLOUD OPERATIONS
+// ==========================================
+
+export async function saveCalorieLogToCloud(entry: CalorieLogEntry): Promise<{ success: boolean; error?: string }> {
+  if (!db) return { success: false, error: "Database not connected" };
+  try {
+    const id = entry.id || `cal-${entry.date}`;
+    const data = { ...entry, id };
+    await setDoc(doc(db, "calories", id), sanitizeForFirestore(data), { merge: true });
+    invalidateCachePattern("calories");
+    return { success: true };
+  } catch (err: any) {
+    console.error("saveCalorieLogToCloud error:", err);
+    return { success: false, error: err.message || "Failed to save calorie record" };
+  }
+}
+
+export async function fetchCalorieLogsFromCloud(): Promise<CalorieLogEntry[]> {
+  if (!db) return [];
+  return dedupeFetch("calories", async () => {
+    try {
+      const snap = await getDocs(collection(db!, "calories"));
+      const list: CalorieLogEntry[] = [];
+      snap.forEach((d) => {
+        list.push(d.data() as CalorieLogEntry);
+      });
+      return list.sort((a, b) => b.date.localeCompare(a.date));
+    } catch (err: any) {
+      console.warn("fetchCalorieLogsFromCloud warn:", err);
+      return [];
+    }
+  }, 10000);
+}
+
+export async function deleteCalorieLogFromCloud(calorieLogId: string): Promise<{ success: boolean; error?: string }> {
+  if (!db) return { success: false, error: "Database not connected" };
+  try {
+    await deleteDoc(doc(db, "calories", calorieLogId));
+    invalidateCachePattern("calories");
+    return { success: true };
+  } catch (err: any) {
+    console.error("deleteCalorieLogFromCloud error:", err);
+    return { success: false, error: err.message || "Failed to delete calorie record" };
+  }
+}
+
+// ==========================================
+// PROGRESS TRACKER CLOUD OPERATIONS
+// ==========================================
+
+export async function saveProgressMeasurementToCloud(measurement: BodyMeasurement): Promise<{ success: boolean; error?: string }> {
+  if (!db) return { success: false, error: "Database not connected" };
+  try {
+    const id = measurement.id || `prog-${measurement.date}`;
+    const data = { ...measurement, id };
+    await setDoc(doc(db, "progress", id), sanitizeForFirestore(data), { merge: true });
+    invalidateCachePattern("progress");
+    return { success: true };
+  } catch (err: any) {
+    console.error("saveProgressMeasurementToCloud error:", err);
+    return { success: false, error: err.message || "Failed to save progress entry" };
+  }
+}
+
+export async function fetchProgressMeasurementsFromCloud(): Promise<BodyMeasurement[]> {
+  if (!db) return [];
+  return dedupeFetch("progress", async () => {
+    try {
+      const snap = await getDocs(collection(db!, "progress"));
+      const list: BodyMeasurement[] = [];
+      snap.forEach((d) => {
+        list.push(d.data() as BodyMeasurement);
+      });
+      return list.sort((a, b) => b.date.localeCompare(a.date));
+    } catch (err: any) {
+      console.warn("fetchProgressMeasurementsFromCloud warn:", err);
+      return [];
+    }
+  }, 10000);
+}
+
+export async function deleteProgressMeasurementFromCloud(measurementId: string): Promise<{ success: boolean; error?: string }> {
+  if (!db) return { success: false, error: "Database not connected" };
+  try {
+    await deleteDoc(doc(db, "progress", measurementId));
+    invalidateCachePattern("progress");
+    return { success: true };
+  } catch (err: any) {
+    console.error("deleteProgressMeasurementFromCloud error:", err);
+    return { success: false, error: err.message || "Failed to delete progress measurement" };
+  }
+}
+
+// ==========================================
+// SETTINGS CLOUD OPERATIONS
+// ==========================================
+
+export async function saveAppSettingsToCloud(settings: AppSettings, userId = "global-settings"): Promise<{ success: boolean; error?: string }> {
+  if (!db) return { success: false, error: "Database not connected" };
+  try {
+    await setDoc(doc(db, "settings", userId), sanitizeForFirestore(settings), { merge: true });
+    invalidateCachePattern("settings");
+    return { success: true };
+  } catch (err: any) {
+    console.error("saveAppSettingsToCloud error:", err);
+    return { success: false, error: err.message || "Failed to save settings" };
+  }
+}
+
+export async function fetchAppSettingsFromCloud(userId = "global-settings"): Promise<AppSettings | null> {
+  if (!db) return null;
+  try {
+    const snap = await getDoc(doc(db, "settings", userId));
+    if (snap.exists()) {
+      return snap.data() as AppSettings;
+    }
+    return null;
+  } catch (err: any) {
+    console.warn("fetchAppSettingsFromCloud warn:", err);
+    return null;
+  }
+}
+
+export const saveSettingsToCloud = saveAppSettingsToCloud;
+export const fetchSettingsFromCloud = fetchAppSettingsFromCloud;
+
+export async function syncOfflineCacheToCloud(): Promise<boolean> {
+  return true;
 }
 

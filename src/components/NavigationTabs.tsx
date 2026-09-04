@@ -13,6 +13,11 @@ import {
   DollarSign,
   FileCheck,
   Users,
+  Package,
+  Flame,
+  Settings,
+  Layers,
+  Cloud,
 } from "lucide-react";
 import { TabId } from "../types";
 import { Language, TRANSLATIONS } from "../utils/i18n";
@@ -37,12 +42,16 @@ export function NavigationTabs({
 
   const TABS: { id: TabId; label: string; shortLabel: string; icon: any }[] = [
     { id: "dashboard", label: t.dashboard, shortLabel: lang === "mr" ? "डॅशबोर्ड" : "Dashboard", icon: LayoutDashboard },
-    { id: "admin-users", label: lang === "mr" ? "युझर मॅनेजमेंट" : "Users & Admin", shortLabel: lang === "mr" ? "युझर्स" : "Users", icon: Users },
+    { id: "cloud-sync", label: lang === "mr" ? "क्लाउड डॅशबोर्ड व सिंक" : "Cloud Sync & Multi-Device", shortLabel: lang === "mr" ? "क्लाउड" : "Cloud Sync", icon: Cloud },
+    { id: "admin-users", label: lang === "mr" ? "युझर मॅनेजमेंट" : "Admin & Users", shortLabel: lang === "mr" ? "युझर्स" : "Admin", icon: Users },
+    { id: "products", label: lang === "mr" ? "उत्पादने व स्टोअर" : "Products & Store", shortLabel: lang === "mr" ? "स्टोअर" : "Products", icon: Package },
+    { id: "exercises", label: lang === "mr" ? "व्यायाम लायब्ररी" : "Exercises", shortLabel: lang === "mr" ? "व्यायाम" : "Exercises", icon: Dumbbell },
+    { id: "calories", label: lang === "mr" ? "कॅलरी ट्रॅकर" : "Calorie Tracker", shortLabel: lang === "mr" ? "कॅलरीज" : "Calories", icon: Flame },
+    { id: "diet", label: t.diet, shortLabel: lang === "mr" ? "आहार" : "Diet", icon: UtensilsCrossed },
+    { id: "workout", label: t.workout, shortLabel: lang === "mr" ? "वर्कआउट" : "Workout", icon: Activity },
     { id: "rate-charts", label: lang === "mr" ? "दर पत्रक" : "Rate Charts", shortLabel: lang === "mr" ? "दर पत्रक" : "Tariffs", icon: DollarSign },
     { id: "forms", label: lang === "mr" ? "फॉर्म्स व ऑडिट" : "Forms & Audits", shortLabel: lang === "mr" ? "फॉर्म्स" : "Forms", icon: FileCheck },
     { id: "group-reports", label: lang === "mr" ? "गट अहवाल" : "Cohort Reports", shortLabel: lang === "mr" ? "गट अहवाल" : "Cohorts", icon: BarChart3 },
-    { id: "workout", label: t.workout, shortLabel: lang === "mr" ? "व्यायाम" : "Workout", icon: Dumbbell },
-    { id: "diet", label: t.diet, shortLabel: lang === "mr" ? "आहार" : "Diet", icon: UtensilsCrossed },
     { id: "activity", label: t.activity, shortLabel: lang === "mr" ? "ऍक्टिव्हिटी" : "Activity", icon: Footprints },
     { id: "lifestyle", label: t.lifestyle, shortLabel: lang === "mr" ? "जीवनशैली" : "Lifestyle", icon: Clock },
     { id: "health", label: t.health, shortLabel: lang === "mr" ? "आरोग्य" : "Health", icon: Activity },
@@ -50,6 +59,7 @@ export function NavigationTabs({
     { id: "coach", label: t.coach, shortLabel: lang === "mr" ? "कोच" : "Coach", icon: UserCheck },
     { id: "checklist", label: t.checklist, shortLabel: lang === "mr" ? "चेकलिस्ट" : "Checklist", icon: CheckSquare },
     { id: "reports", label: t.reports, shortLabel: lang === "mr" ? "अहवाल" : "Reports", icon: BarChart3 },
+    { id: "settings", label: lang === "mr" ? "सेटिंग्ज" : "Settings", shortLabel: lang === "mr" ? "सेटिंग्ज" : "Settings", icon: Settings },
     { id: "ailab", label: t.ailab, shortLabel: lang === "mr" ? "AI लॅब" : "AI Lab", icon: Sparkles },
   ];
 

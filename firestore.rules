@@ -11,87 +11,70 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    function isPermittedGuest(userId) {
-      return userId == 'guest' ||
+    function isPermittedUser(userId) {
+      return isOwner(userId) ||
+             userId == 'guest' ||
              userId == 'default-athlete' ||
-             userId == 'guest_athlete' ||
              userId == 'user_local' ||
-             userId == 'usr-admin-01' ||
-             userId == 'current-fitness-user' ||
-             userId == 'prathameshmore949@gmail.com' ||
-             userId.matches('^usr-.*') ||
-             userId.matches('^phone-.*') ||
-             userId.matches('^[a-zA-Z0-9_.@-]+$');
+             userId == 'usr-admin-01';
     }
 
-    function isAuthorized(userId) {
-      return isOwner(userId) || isPermittedGuest(userId);
+    function isPermittedGuest(userId) {
+      return isPermittedUser(userId);
     }
 
-    // User profile document and subcollections (strictly isolated per user UID)
+    // User profile document and isolated subcollections under users/{userId}
     match /users/{userId} {
-      allow read, write: if isAuthorized(userId);
+      allow read, write: if isPermittedUser(userId);
 
-      // Account profile & RBAC data
-      match /account/{docId} {
-        allow read, write: if isAuthorized(userId);
+      // Cloud Firestore collections as requested:
+      // profile, products, stock, sales, customers, suppliers, purchase, orders, reports, settings, expenses, income, notifications, backup
+      match /profile/{docId} {
+        allow read, write: if isPermittedUser(userId);
+      }
+      match /products/{productId} {
+        allow read, write: if isPermittedUser(userId);
+      }
+      match /stock/{stockId} {
+        allow read, write: if isPermittedUser(userId);
+      }
+      match /sales/{saleId} {
+        allow read, write: if isPermittedUser(userId);
+      }
+      match /customers/{customerId} {
+        allow read, write: if isPermittedUser(userId);
+      }
+      match /suppliers/{supplierId} {
+        allow read, write: if isPermittedUser(userId);
+      }
+      match /purchase/{purchaseId} {
+        allow read, write: if isPermittedUser(userId);
+      }
+      match /orders/{orderId} {
+        allow read, write: if isPermittedUser(userId);
+      }
+      match /reports/{reportId} {
+        allow read, write: if isPermittedUser(userId);
+      }
+      match /settings/{settingId} {
+        allow read, write: if isPermittedUser(userId);
+      }
+      match /expenses/{expenseId} {
+        allow read, write: if isPermittedUser(userId);
+      }
+      match /income/{incomeId} {
+        allow read, write: if isPermittedUser(userId);
+      }
+      match /notifications/{notificationId} {
+        allow read, write: if isPermittedUser(userId);
+      }
+      match /backup/{backupId} {
+        allow read, write: if isPermittedUser(userId);
       }
 
-      // Complete fitness state and cloud synchronizations
-      match /fitnessData/{docId} {
-        allow read, write: if isAuthorized(userId);
-      }
-
-      // Login session history tracking
-      match /loginHistory/{historyId} {
-        allow read, write: if isAuthorized(userId);
-      }
-
-      // Audit and activity logging
-      match /auditLogs/{logId} {
-        allow read, write: if isAuthorized(userId);
-      }
-
-      // Enterprise rate charts
-      match /rateCharts/{chartId} {
-        allow read, write: if isAuthorized(userId);
-      }
-
-      // Dynamic forms & client intake submissions
-      match /forms/{formId} {
-        allow read, write: if isAuthorized(userId);
-      }
-
-      // Group cohort progress reports
-      match /groupReports/{reportId} {
-        allow read, write: if isAuthorized(userId);
-      }
-
-      // Custom food dictionary
-      match /customFoods/{foodId} {
-        allow read, write: if isAuthorized(userId);
-      }
-
-      // Daily and monthly fitness reports
-      match /dailyReports/{dateId} {
-        allow read, write: if isAuthorized(userId);
-      }
-
-      match /monthlyReports/{monthId} {
-        allow read, write: if isAuthorized(userId);
-      }
-
-      match /submittedDailyReports/{dateId} {
-        allow read, write: if isAuthorized(userId);
-      }
-
-      match /submittedMonthlyReports/{monthId} {
-        allow read, write: if isAuthorized(userId);
-      }
-
-      // Recursive fallback for any nested subcollections
+      // Recursive fallback for any nested subcollections under user's UID
       match /{allSubcollections=**} {
-        allow read, write: if isAuthorized(userId);
+        allow read, write: if isPermittedUser(userId);
       }
     }
 
@@ -114,6 +97,47 @@ service cloud.firestore {
     match /auditLogs/{logId} {
       allow read: if isAuthenticated() || isPermittedGuest('usr-admin-01');
       allow create: if true;
+    }
+
+    // Core System Collections: Products, Exercises, Diet Plans, Meals, Calories, Reports, Progress, Settings
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if isAuthenticated() || isPermittedGuest('usr-admin-01');
+    }
+
+    match /exercises/{exerciseId} {
+      allow read: if true;
+      allow write: if isAuthenticated() || isPermittedGuest('usr-admin-01');
+    }
+
+    match /dietPlans/{planId} {
+      allow read: if true;
+      allow write: if isAuthenticated() || isPermittedGuest('usr-admin-01');
+    }
+
+    match /meals/{mealId} {
+      allow read: if true;
+      allow write: if isAuthenticated() || isPermittedGuest('usr-admin-01');
+    }
+
+    match /calories/{calorieId} {
+      allow read: if true;
+      allow write: if isAuthenticated() || isPermittedGuest('usr-admin-01');
+    }
+
+    match /reports/{reportId} {
+      allow read: if true;
+      allow write: if isAuthenticated() || isPermittedGuest('usr-admin-01');
+    }
+
+    match /progress/{progressId} {
+      allow read: if true;
+      allow write: if isAuthenticated() || isPermittedGuest('usr-admin-01');
+    }
+
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isAuthenticated() || isPermittedGuest('usr-admin-01');
     }
 
     // Health check & ping tests

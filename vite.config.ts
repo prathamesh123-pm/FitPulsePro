@@ -6,6 +6,15 @@ import {defineConfig} from 'vite';
 export default defineConfig(() => {
   return {
     plugins: [react(), tailwindcss()],
+    envPrefix: ['VITE_', 'FIREBASE_'],
+    define: {
+      'process.env.FIREBASE_API_KEY': JSON.stringify(process.env.FIREBASE_API_KEY || "AIzaSyA6S_WpZXTq1l__v2l36aEqyhjK6ZlPrYE"),
+      'process.env.FIREBASE_AUTH_DOMAIN': JSON.stringify(process.env.FIREBASE_AUTH_DOMAIN || "emergent-horizon-ct3g1.firebaseapp.com"),
+      'process.env.FIREBASE_PROJECT_ID': JSON.stringify(process.env.FIREBASE_PROJECT_ID || "emergent-horizon-ct3g1"),
+      'process.env.FIREBASE_STORAGE_BUCKET': JSON.stringify(process.env.FIREBASE_STORAGE_BUCKET || "emergent-horizon-ct3g1.firebasestorage.app"),
+      'process.env.FIREBASE_MESSAGING_SENDER_ID': JSON.stringify(process.env.FIREBASE_MESSAGING_SENDER_ID || "346873415158"),
+      'process.env.FIREBASE_APP_ID': JSON.stringify(process.env.FIREBASE_APP_ID || "1:346873415158:web:55cbb97424f43070e233d7"),
+    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

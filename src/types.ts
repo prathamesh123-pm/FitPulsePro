@@ -16,12 +16,16 @@ export type Gender = "Male" | "Female" | "Other";
 
 export type TabId =
   | "dashboard"
+  | "cloud-sync"
   | "admin-users"
+  | "products"
+  | "exercises"
   | "rate-charts"
   | "forms"
   | "group-reports"
   | "workout"
   | "diet"
+  | "calories"
   | "activity"
   | "lifestyle"
   | "health"
@@ -29,6 +33,7 @@ export type TabId =
   | "coach"
   | "checklist"
   | "reports"
+  | "settings"
   | "ailab";
 
 export interface EmergencyContact {
@@ -104,10 +109,19 @@ export type MuscleGroup =
   | "Cardio"
   | "Full Body";
 
+export type ExerciseCategory =
+  | "Machine Exercises"
+  | "Free Weight"
+  | "Cardio"
+  | "Stretching"
+  | "Yoga"
+  | "HIIT";
+
 export interface Exercise {
   id: string;
   name: string;
   muscleGroup: MuscleGroup;
+  category?: ExerciseCategory | string;
   secondaryMuscles?: string[];
   equipment: "Barbell" | "Dumbbell" | "Machine" | "Cable" | "Bodyweight" | "Cardio Equipment" | "Kettlebell" | string;
   difficulty: "Beginner" | "Intermediate" | "Advanced";
@@ -121,6 +135,10 @@ export interface Exercise {
   notes?: string;
   isCustom?: boolean;
   orderIndex?: number;
+  sets?: number;
+  reps?: number;
+  restTimeSeconds?: number;
+  targetMuscle?: string;
 }
 
 export interface WorkoutSet {
@@ -683,7 +701,84 @@ export interface SmartCoachNightlyReport {
   encouragement: string;
 }
 
-export type UserRole = "Admin" | "Manager" | "Staff";
+export type UserRole = "Admin" | "Trainer" | "User" | "Manager" | "Staff";
+
+export interface Product {
+  id: string;
+  name: string;
+  category: "Supplements" | "Equipment" | "Gym Gear" | "Apparel" | "Nutrition" | "Accessories" | string;
+  price: number;
+  description: string;
+  stock: number;
+  barcode: string;
+  imageUrl?: string;
+  createdAt: string;
+  updatedAt: string;
+  status: "In Stock" | "Low Stock" | "Out of Stock";
+  createdBy?: string;
+}
+
+export interface CalorieLogEntry {
+  id: string;
+  date: string; // YYYY-MM-DD
+  caloriesRequired: number;
+  caloriesConsumed: number;
+  caloriesBurned: number;
+  remainingCalories: number;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface AppSettings {
+  darkMode?: boolean;
+  theme?: "dark" | "light";
+  language?: "en" | "mr" | "hi";
+  notificationsEnabled?: boolean;
+  emailAlerts?: boolean;
+  workoutReminders?: boolean;
+  hydrationAlerts?: boolean;
+  lastBackupDate?: string;
+  lastSyncTimestamp?: string;
+  cloudSyncIntervalMinutes?: number;
+  notifications?: {
+    workoutReminders?: boolean;
+    mealAlerts?: boolean;
+    waterReminders?: boolean;
+    inventoryWarnings?: boolean;
+    weeklySummary?: boolean;
+  };
+}
+
+export interface GeneratedDietPlan {
+  id: string;
+  title: string;
+  createdAt: string;
+  userId?: string;
+  age: number;
+  gender: Gender;
+  weightKg: number;
+  heightCm: number;
+  bodyFatPct: number;
+  goal: "Weight Loss" | "Weight Gain" | "Maintenance";
+  activityLevel: "Sedentary" | "Lightly Active" | "Moderately Active" | "Very Active" | "Extremely Active";
+  bmi: number;
+  bmr: number;
+  tdee: number;
+  dailyCalories: number;
+  proteinGrams: number;
+  carbsGrams: number;
+  fatGrams: number;
+  waterIntakeLiters: number;
+  meals: {
+    breakfast: { title: string; items: string[]; calories: number; protein: number; carbs: number; fat: number };
+    morningSnack: { title: string; items: string[]; calories: number; protein: number; carbs: number; fat: number };
+    lunch: { title: string; items: string[]; calories: number; protein: number; carbs: number; fat: number };
+    eveningSnack: { title: string; items: string[]; calories: number; protein: number; carbs: number; fat: number };
+    dinner: { title: string; items: string[]; calories: number; protein: number; carbs: number; fat: number };
+    preWorkout: { title: string; items: string[]; calories: number; protein: number; carbs: number; fat: number };
+    postWorkout: { title: string; items: string[]; calories: number; protein: number; carbs: number; fat: number };
+  };
+}
 
 export interface UserAccount {
   uid: string;
@@ -881,6 +976,110 @@ export interface EnterpriseGroupReport {
 
 export type GroupProgressReport = EnterpriseGroupReport;
 
+export interface CustomerItem {
+  id: string;
+  name: string;
+  mobileNumber: string;
+  email?: string;
+  address?: string;
+  photoUrl?: string;
+  totalPurchases?: number;
+  balance?: number;
+  createdAt: string;
+}
+
+export interface SupplierItem {
+  id: string;
+  name: string;
+  company: string;
+  mobileNumber: string;
+  email?: string;
+  address?: string;
+  createdAt: string;
+}
+
+export interface StockRecord {
+  id: string;
+  productId: string;
+  productName: string;
+  type: "IN" | "OUT" | "ADJUST";
+  quantity: number;
+  remainingStock: number;
+  notes?: string;
+  date: string;
+  timestamp: string;
+}
+
+export interface SaleItemDetail {
+  productId: string;
+  name: string;
+  quantity: number;
+  price: number;
+  total: number;
+}
+
+export interface SaleRecord {
+  id: string;
+  invoiceNumber: string;
+  customerId?: string;
+  customerName: string;
+  customerPhone?: string;
+  items: SaleItemDetail[];
+  subtotal: number;
+  discount?: number;
+  tax: number;
+  total: number;
+  paymentMethod: "Cash" | "UPI / Online" | "Card" | "Credit / Due";
+  date: string;
+  createdAt: string;
+  billUrl?: string;
+}
+
+export interface PurchaseRecord {
+  id: string;
+  billNumber: string;
+  supplierId?: string;
+  supplierName: string;
+  items: { name: string; quantity: number; cost: number; total: number }[];
+  total: number;
+  paymentMethod?: string;
+  date: string;
+  createdAt: string;
+  billUrl?: string;
+}
+
+export interface OrderRecord {
+  id: string;
+  orderNumber: string;
+  customerName: string;
+  customerPhone?: string;
+  status: "Pending" | "Processing" | "Completed" | "Cancelled";
+  totalAmount: number;
+  itemsCount: number;
+  itemsSummary?: string;
+  date: string;
+}
+
+export interface ExpenseRecord {
+  id: string;
+  title: string;
+  category: "Rent" | "Supplements" | "Equipment" | "Maintenance" | "Salaries" | "Electricity" | "Other";
+  amount: number;
+  paymentMethod: string;
+  date: string;
+  receiptUrl?: string;
+  notes?: string;
+}
+
+export interface IncomeRecord {
+  id: string;
+  source: "Gym Membership" | "Personal Training" | "Supplements Store" | "Diet Consultation" | "Other";
+  amount: number;
+  paymentMethod: string;
+  date: string;
+  notes?: string;
+}
+
 export interface AppNotification {
   id: string;
   title: string;
@@ -939,6 +1138,22 @@ export interface AppState {
     isAnonymous?: boolean;
   } | null;
   darkMode: boolean;
+  products?: Product[];
+  calorieLogs?: CalorieLogEntry[];
+  appSettings?: AppSettings;
+  settings?: AppSettings;
+  generatedDietPlans?: GeneratedDietPlan[];
+  dietPlans?: SavedDietPlan[];
+  workouts?: WorkoutSession[];
+  accounts: UserAccount[];
+  customers?: CustomerItem[];
+  suppliers?: SupplierItem[];
+  sales?: SaleRecord[];
+  stockRecords?: StockRecord[];
+  purchases?: PurchaseRecord[];
+  orders?: OrderRecord[];
+  expenses?: ExpenseRecord[];
+  incomes?: IncomeRecord[];
 }
 
 

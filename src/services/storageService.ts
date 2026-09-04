@@ -1224,6 +1224,7 @@ export const INITIAL_STATE: AppState = {
     authProvider: "Google",
   },
   darkMode: true,
+  accounts: [DEFAULT_USER_ACCOUNT],
 };
 
 export function exportAppStateJSON(state?: AppState): void {

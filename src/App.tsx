@@ -47,6 +47,16 @@ import { ViewSkeleton } from "./components/ViewSkeleton";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Language } from "./utils/i18n";
 import { Exercise, WorkoutTemplate, ActivityLog, DailyRoutineLog, AppNotification } from "./types";
+import { SplashScreen } from "./components/SplashScreen";
+import { AuthScreen } from "./components/AuthScreen";
+import { UserProfileManager } from "./components/UserProfileManager";
+import { CloudSyncDashboard } from "./components/CloudSyncDashboard";
+import {
+  logoutUserFromFirebase,
+  autoSaveUserDataToCloud,
+  downloadAllUserDataFromCloud,
+  subscribeToUserMultiDeviceSync,
+} from "./services/firebaseCloudSync";
 
 // Resilient code-splitting loader with automatic retry on temporary network/deployment hiccups
 function lazyWithRetry<T extends ComponentType<any>>(
@@ -80,6 +90,11 @@ const EnterpriseRateChartsView = lazyWithRetry(() => import("./components/Enterp
 const EnterpriseFormsView = lazyWithRetry(() => import("./components/EnterpriseFormsView").then(m => ({ default: m.EnterpriseFormsView })));
 const EnterpriseGroupReportsView = lazyWithRetry(() => import("./components/EnterpriseGroupReportsView").then(m => ({ default: m.EnterpriseGroupReportsView })));
 const UserManagementView = lazyWithRetry(() => import("./components/UserManagementView").then(m => ({ default: m.UserManagementView })));
+const AdminDashboardView = lazyWithRetry(() => import("./components/AdminDashboardView").then(m => ({ default: m.AdminDashboardView })));
+const ProductManagementView = lazyWithRetry(() => import("./components/ProductManagementView").then(m => ({ default: m.ProductManagementView })));
+const ExerciseModuleView = lazyWithRetry(() => import("./components/ExerciseModuleView").then(m => ({ default: m.ExerciseModuleView })));
+const CalorieTrackerView = lazyWithRetry(() => import("./components/CalorieTrackerView").then(m => ({ default: m.CalorieTrackerView })));
+const SettingsModuleView = lazyWithRetry(() => import("./components/SettingsModuleView").then(m => ({ default: m.SettingsModuleView })));
 
 // Modals
 const SecurityProfileModal = lazyWithRetry(() => import("./components/SecurityProfileModal").then(m => ({ default: m.SecurityProfileModal })));
@@ -90,6 +105,7 @@ const PersonalRecordsModal = lazyWithRetry(() => import("./components/PersonalRe
 const WaterTrackerModal = lazyWithRetry(() => import("./components/WaterTrackerModal").then(m => ({ default: m.WaterTrackerModal })));
 const AudioCoachHUD = lazyWithRetry(() => import("./components/AudioCoachHUD").then(m => ({ default: m.AudioCoachHUD })));
 const EnterpriseAuthModal = lazyWithRetry(() => import("./components/EnterpriseAuthModal").then(m => ({ default: m.EnterpriseAuthModal })));
+const DietPlannerModal = lazyWithRetry(() => import("./components/DietPlannerModal").then(m => ({ default: m.DietPlannerModal })));
 
 export default function App() {
   const [appState, setAppState] = useState<AppState>(() => loadAppState());
@@ -180,22 +196,73 @@ export default function App() {
 
   // Modals
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isUserProfileManagerOpen, setIsUserProfileManagerOpen] = useState(false);
   const [isCloudSyncModalOpen, setIsCloudSyncModalOpen] = useState(false);
   const [isAchievementsModalOpen, setIsAchievementsModalOpen] = useState(false);
   const [isPlateCalculatorOpen, setIsPlateCalculatorOpen] = useState(false);
   const [isPRModalOpen, setIsPRModalOpen] = useState(false);
   const [isWaterTrackerOpen, setIsWaterTrackerOpen] = useState(false);
   const [isAudioCoachOpen, setIsAudioCoachOpen] = useState(false);
+  const [isDietPlannerOpen, setIsDietPlannerOpen] = useState(false);
 
-  // Debounced Auto-save to prevent localStorage thrashing and excessive CPU cycles
+  // Splash & Authentication States (Requirements 1, 2, 3, 4)
+  const [showSplash, setShowSplash] = useState(true);
+  const [authResolved, setAuthResolved] = useState<boolean | null>(null);
+  const [firebaseUser, setFirebaseUser] = useState<any>(() => auth?.currentUser || null);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    try {
+      return Boolean(localStorage.getItem("FITPULSE_AUTH_ACTIVE") === "true");
+    } catch {
+      return false;
+    }
+  });
+
+  // Logout handler (Requirement 13)
+  const handleLogout = async () => {
+    try {
+      await logoutUserFromFirebase();
+    } catch (e) {
+      console.warn("Logout notice:", e);
+    }
+    try {
+      localStorage.removeItem("FITPULSE_AUTH_ACTIVE");
+    } catch {}
+    setIsAuthenticated(false);
+    setAppState((prev) => ({
+      ...prev,
+      currentUserAccount: undefined,
+      cloudUser: null,
+    }));
+    handleNotify("Signed Out", "You have been logged out securely.", "info", "Auth");
+  };
+
+  // Requirement 7 & 14: Debounced Auto-save to local storage AND Firebase Cloud Firestore under users/{UID}/...
   const saveTimeoutRef = useRef<any>(null);
   useEffect(() => {
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
     }
-    saveTimeoutRef.current = setTimeout(() => {
+    saveTimeoutRef.current = setTimeout(async () => {
       saveAppState(appState);
-    }, 400);
+      const uid = firebaseUser?.uid || auth?.currentUser?.uid;
+      if (uid && uid !== "guest" && navigator.onLine) {
+        try {
+          const { success, lastSyncDate } = await autoSaveUserDataToCloud(uid, appState);
+          if (success) {
+            setAppState((prev) => ({
+              ...prev,
+              sync: {
+                ...prev.sync,
+                syncStatus: "synced",
+                lastSyncDate,
+              },
+            }));
+          }
+        } catch (err) {
+          console.warn("Auto-save sync notice:", err);
+        }
+      }
+    }, 500);
 
     return () => {
       if (saveTimeoutRef.current) {
@@ -208,7 +275,14 @@ export default function App() {
   useEffect(() => {
     // 1. Listen for user authentication changes
     const unsubAuth = onCloudAuthStateChanged(async (user) => {
+      setFirebaseUser(user);
       if (user) {
+        setAuthResolved(true);
+        setIsAuthenticated(true);
+        try {
+          localStorage.setItem("FITPULSE_AUTH_ACTIVE", "true");
+        } catch {}
+
         let account = await fetchUserAccountFromCloud(user.uid);
         if (!account) {
           account = {
@@ -227,8 +301,12 @@ export default function App() {
           };
         }
 
+        // WhatsApp / Google Drive style multi-device cloud restoration (Requirement 9 & 14)
+        const restoredCloudData = await downloadAllUserDataFromCloud(user.uid);
+
         setAppState((prev) => ({
           ...prev,
+          ...(restoredCloudData || {}),
           currentUserAccount: account || prev.currentUserAccount,
           cloudUser: {
             uid: user.uid,
@@ -237,6 +315,12 @@ export default function App() {
             photoUrl: user.photoURL || undefined,
             isAnonymous: user.isAnonymous,
           },
+          profile: {
+            ...prev.profile,
+            ...(restoredCloudData?.profile || {}),
+            fullName: user.displayName || prev.profile.fullName,
+            email: user.email || prev.profile.email,
+          },
           sync: {
             ...prev.sync,
             isOnline: navigator.onLine,
@@ -244,6 +328,16 @@ export default function App() {
             lastSyncDate: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
             accountType: "Cloud Authenticated",
           },
+        }));
+      } else {
+        setAuthResolved(true);
+        const remembered = localStorage.getItem("FITPULSE_AUTH_ACTIVE");
+        if (!remembered) {
+          setIsAuthenticated(false);
+        }
+        setAppState((prev) => ({
+          ...prev,
+          cloudUser: null,
         }));
       }
     });
@@ -273,10 +367,10 @@ export default function App() {
           }
         }
 
-        // Ensure all local state data is synced to Firebase Console
+        // Ensure all local state data is synced to Firebase Console for active authenticated users
         try {
-          const uid = auth?.currentUser?.uid || appState.cloudUser?.uid || "usr-admin-01";
-          if (isMounted) {
+          const uid = auth?.currentUser?.uid;
+          if (uid && isMounted) {
             await saveAllDataToFirebaseConsole(uid, appState);
             if (isMounted) {
               setAppState((prev) => ({
@@ -334,15 +428,37 @@ export default function App() {
     };
   }, []);
 
-  // Real-time Cloud Synchronization listener for multi-device live sync
+  // Real-time Cloud Synchronization listener for multi-device live sync (Requirement 9 & 15)
   useEffect(() => {
-    const activeUserId = appState.cloudUser?.uid || appState.currentUserAccount?.uid;
+    const activeUserId = firebaseUser?.uid || auth?.currentUser?.uid;
     if (!activeUserId || activeUserId === "guest") return;
 
-    const unsubscribe = subscribeToCloudChanges(activeUserId, (remoteState) => {
+    // 1. Subscribe to WhatsApp/Google Drive backup snapshot
+    const unsubMultiDevice = subscribeToUserMultiDeviceSync(activeUserId, (remoteState) => {
+      if (remoteState && typeof remoteState === "object") {
+        setAppState((prev) => ({
+          ...prev,
+          ...remoteState,
+          profile: remoteState.profile ? { ...prev.profile, ...remoteState.profile } : prev.profile,
+          products: remoteState.products || prev.products,
+          customers: remoteState.customers || prev.customers,
+          sales: remoteState.sales || prev.sales,
+          stockRecords: remoteState.stockRecords || prev.stockRecords,
+          orders: remoteState.orders || prev.orders,
+          sync: {
+            ...prev.sync,
+            isOnline: true,
+            syncStatus: "synced",
+            lastSyncDate: remoteState.sync?.lastSyncDate || new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          },
+        }));
+      }
+    });
+
+    // 2. Subscribe to individual Firestore collections
+    const unsubCloudChanges = subscribeToCloudChanges(activeUserId, (remoteState) => {
       if (remoteState && typeof remoteState === "object") {
         setAppState((prev) => {
-          // Compare lastUpdated timestamps or IDs to prevent local overwrite if local is fresher
           const remoteTime = remoteState.sync?.lastSyncDate;
           return {
             ...prev,
@@ -365,9 +481,10 @@ export default function App() {
     });
 
     return () => {
-      unsubscribe();
+      unsubMultiDevice();
+      unsubCloudChanges();
     };
-  }, [appState.cloudUser?.uid, appState.currentUserAccount?.uid]);
+  }, [firebaseUser?.uid]);
 
   // Derived health calculations
   const healthMetrics = useMemo(() => {
@@ -715,6 +832,65 @@ export default function App() {
     });
   };
 
+  // Requirement 1: Splash Screen
+  if (showSplash) {
+    return (
+      <SplashScreen
+        isLoggedIn={authResolved}
+        onFinish={(loggedIn) => {
+          setShowSplash(false);
+          setIsAuthenticated(loggedIn);
+        }}
+      />
+    );
+  }
+
+  // Requirement 2: Login & Registration Screen
+  if (!isAuthenticated) {
+    return (
+      <AuthScreen
+        lang={lang}
+        onLoginSuccess={(account, restoredCloudState) => {
+          try {
+            localStorage.setItem("FITPULSE_AUTH_ACTIVE", "true");
+          } catch {}
+          setIsAuthenticated(true);
+          setAppState((prev) => {
+            const next = {
+              ...prev,
+              ...(restoredCloudState || {}),
+              currentUserAccount: account,
+              cloudUser: {
+                uid: account.uid,
+                email: account.email,
+                displayName: account.displayName,
+                photoUrl: account.photoURL,
+                isAnonymous: false,
+              },
+              profile: {
+                ...prev.profile,
+                ...(restoredCloudState?.profile || {}),
+                fullName: account.displayName || prev.profile.fullName,
+                email: account.email || prev.profile.email,
+                mobileNumber: account.mobileNumber || prev.profile.mobileNumber,
+              },
+              sync: {
+                ...prev.sync,
+                isOnline: navigator.onLine,
+                syncStatus: "synced" as const,
+                lastSyncDate: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                accountType: "Cloud Authenticated" as const,
+              },
+            };
+            saveAppState(next);
+            return next;
+          });
+          handleNotify("Welcome Back", `Successfully signed in as ${account.displayName}!`, "success", "Auth");
+        }}
+      />
+    );
+  }
+
   // If locked, show high-security PIN & Biometric Screen
   if (isLocked) {
     return <LockScreen security={appState.security} onUnlock={() => setIsLocked(false)} />;
@@ -733,7 +909,8 @@ export default function App() {
         notificationsEnabled={notificationsEnabled}
         onToggleNotificationsEnabled={handleToggleNotificationsEnabled}
         onToggleDarkMode={handleToggleDarkMode}
-        onOpenProfile={() => setIsProfileModalOpen(true)}
+        onOpenProfile={() => setIsUserProfileManagerOpen(true)}
+        onLogout={handleLogout}
         onLockApp={() => setIsLocked(true)}
         onOpenAILab={() => setActiveTab("ailab")}
         onOpenAchievements={() => setIsAchievementsModalOpen(true)}
@@ -815,8 +992,54 @@ export default function App() {
               </div>
             )}
 
+            {activeTab === "cloud-sync" && (
+              <CloudSyncDashboard
+                state={appState}
+                onUpdateState={setAppState}
+                onNavigateTab={(tab) => setActiveTab(tab)}
+                onOpenProfile={() => setIsUserProfileManagerOpen(true)}
+                onLogout={handleLogout}
+                onNotify={handleNotify}
+                lang={lang}
+              />
+            )}
+
             {activeTab === "admin-users" && (
-              <UserManagementView
+              <AdminDashboardView
+                state={appState}
+                onUpdateState={setAppState}
+                onNavigateTab={(tab) => setActiveTab(tab)}
+                onOpenDietPlanner={() => setIsDietPlannerOpen(true)}
+                onNotify={handleNotify}
+              />
+            )}
+
+            {activeTab === "products" && (
+              <ProductManagementView
+                state={appState}
+                onUpdateState={setAppState}
+                onNotify={handleNotify}
+              />
+            )}
+
+            {activeTab === "exercises" && (
+              <ExerciseModuleView
+                state={appState}
+                onUpdateState={setAppState}
+                onNotify={handleNotify}
+              />
+            )}
+
+            {activeTab === "calories" && (
+              <CalorieTrackerView
+                state={appState}
+                onUpdateState={setAppState}
+                onNotify={handleNotify}
+              />
+            )}
+
+            {activeTab === "settings" && (
+              <SettingsModuleView
                 state={appState}
                 onUpdateState={setAppState}
                 onNotify={handleNotify}
@@ -1045,6 +1268,27 @@ export default function App() {
           <AudioCoachHUD
             isOpen={isAudioCoachOpen}
             onClose={() => setIsAudioCoachOpen(false)}
+            lang={lang}
+          />
+        )}
+
+        {isDietPlannerOpen && (
+          <DietPlannerModal
+            isOpen={isDietPlannerOpen}
+            onClose={() => setIsDietPlannerOpen(false)}
+            state={appState}
+            onUpdateState={setAppState}
+            onNotify={handleNotify}
+          />
+        )}
+
+        {isUserProfileManagerOpen && (
+          <UserProfileManager
+            state={appState}
+            onUpdateProfile={handleUpdateProfile}
+            onClose={() => setIsUserProfileManagerOpen(false)}
+            onLogout={handleLogout}
+            onNotify={handleNotify}
             lang={lang}
           />
         )}

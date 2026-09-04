@@ -138,9 +138,80 @@
         "appState": { "type": "object" }
       },
       "required": ["userId", "lastUpdated"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Gym & Diet inventory products with pricing, stock, barcode, and categories",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "price": { "type": "number" },
+        "description": { "type": "string" },
+        "stock": { "type": "number" },
+        "barcode": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "name", "category", "price", "stock"]
+    },
+    "Exercise": {
+      "title": "Exercise",
+      "description": "Exercise database with video, image, sets, reps, rest time, and target muscles",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "targetMuscle": { "type": "string" },
+        "instructions": { "type": "string" },
+        "sets": { "type": "number" },
+        "reps": { "type": "number" }
+      },
+      "required": ["id", "name", "instructions"]
+    },
+    "CalorieLog": {
+      "title": "CalorieLog",
+      "description": "Daily calorie tracking records",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string" },
+        "caloriesRequired": { "type": "number" },
+        "caloriesConsumed": { "type": "number" },
+        "caloriesBurned": { "type": "number" },
+        "remainingCalories": { "type": "number" }
+      },
+      "required": ["id", "date", "caloriesRequired"]
     }
   },
   "firestore": {
+    "/products/{productId}": {
+      "schema": "Product",
+      "description": "Gym store and nutrition products"
+    },
+    "/exercises/{exerciseId}": {
+      "schema": "Exercise",
+      "description": "Gym exercises database"
+    },
+    "/dietPlans/{planId}": {
+      "schema": "DietPlan",
+      "description": "Custom and generated diet plans"
+    },
+    "/calories/{calorieId}": {
+      "schema": "CalorieLog",
+      "description": "Calorie tracker daily entries"
+    },
+    "/progress/{progressId}": {
+      "schema": "FitnessData",
+      "description": "Body measurements and progress logs"
+    },
+    "/settings/{settingId}": {
+      "schema": "FitnessData",
+      "description": "Application preferences and settings"
+    },
     "/users/{userId}": {
       "schema": "UserProfile",
       "description": "User document storing fitness account profile"
