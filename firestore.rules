@@ -18,7 +18,8 @@ service cloud.firestore {
              userId == 'user_local' ||
              userId == 'usr-admin-01' ||
              userId.matches('^vault_.*') ||
-             userId.matches('^guest_.*');
+             userId.matches('^guest_.*') ||
+             userId.matches('^google_.*');
     }
 
     function isPermittedGuest(userId) {

@@ -25,6 +25,7 @@ import {
   ChevronUp,
   RefreshCw,
   AlertTriangle,
+  Globe,
 } from "lucide-react";
 import {
   loginWithFirebase,
@@ -45,6 +46,7 @@ import {
   resolvedFirebaseConfig,
 } from "../services/firebase";
 import { FirebaseMigrationModal } from "./FirebaseMigrationModal";
+import { AuthorizedDomainsModal } from "./AuthorizedDomainsModal";
 import { AppState, UserAccount } from "../types";
 
 interface AuthScreenProps {
@@ -78,6 +80,7 @@ export function AuthScreen({ onLoginSuccess, lang = "en" }: AuthScreenProps) {
   const [showConfigInspector, setShowConfigInspector] = useState(false);
   const [hasCopiedUrl, setHasCopiedUrl] = useState(false);
   const [isMigrationModalOpen, setIsMigrationModalOpen] = useState(false);
+  const [isAuthorizedDomainsModalOpen, setIsAuthorizedDomainsModalOpen] = useState(false);
 
   const configVerification = getFirebaseConfigVerification();
   const consoleUrl = providerCheck?.consoleUrl || "https://console.firebase.google.com/project/emergent-horizon-ct3g1/authentication/providers";
@@ -483,14 +486,25 @@ export function AuthScreen({ onLoginSuccess, lang = "en" }: AuthScreenProps) {
 
             {/* Action Bar */}
             <div className="mt-3 pt-3 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2">
-              <button
-                type="button"
-                onClick={() => setIsMigrationModalOpen(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-xs font-bold text-emerald-300 transition cursor-pointer"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Migrate to Personal Firebase Project ↗</span>
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsMigrationModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-xs font-bold text-emerald-300 transition cursor-pointer"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Migrate to Personal Firebase Project ↗</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsAuthorizedDomainsModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-teal-500/15 hover:bg-teal-500/25 border border-teal-500/30 text-xs font-bold text-teal-300 transition cursor-pointer"
+                >
+                  <Globe className="w-3.5 h-3.5 text-teal-400" />
+                  <span>Authorized Domains Manager ↗</span>
+                </button>
+              </div>
 
               <button
                 type="button"
@@ -835,6 +849,17 @@ export function AuthScreen({ onLoginSuccess, lang = "en" }: AuthScreenProps) {
                   <User className="w-3.5 h-3.5 text-slate-500" />
                   <span>{lang === "mr" ? "गेस्ट मोड (खात्याशिवाय त्वरित सुरू करा)" : "Explore in Guest / Offline Mode"}</span>
                 </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsAuthorizedDomainsModalOpen(true)}
+                  className="w-full text-center text-[10px] text-slate-400 hover:text-teal-300 flex items-center justify-center gap-1.5 transition cursor-pointer pt-1"
+                >
+                  <Globe className="w-3 h-3 text-teal-400 shrink-0" />
+                  <span className="truncate">
+                    Domain: <code className="text-emerald-400 font-mono">{typeof window !== "undefined" ? window.location.hostname : "Active Host"}</code> • View Authorized Domains
+                  </span>
+                </button>
               </div>
             </div>
           )}
@@ -937,6 +962,13 @@ export function AuthScreen({ onLoginSuccess, lang = "en" }: AuthScreenProps) {
       <FirebaseMigrationModal
         isOpen={isMigrationModalOpen}
         onClose={() => setIsMigrationModalOpen(false)}
+      />
+
+      {/* Authorized Domains Modal */}
+      <AuthorizedDomainsModal
+        isOpen={isAuthorizedDomainsModalOpen}
+        onClose={() => setIsAuthorizedDomainsModalOpen(false)}
+        lang={lang}
       />
     </div>
   );

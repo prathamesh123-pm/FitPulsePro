@@ -36,6 +36,87 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
+// Firebase Authentication Authorized Domains Diagnostic & Setup Endpoint
+app.get("/api/firebase/authorized-domains", (req, res) => {
+  const host = req.get("host") || "localhost:3000";
+  const hostname = host.split(":")[0];
+  const projectId = process.env.FIREBASE_PROJECT_ID || "emergent-horizon-ct3g1";
+
+  const requiredDomains = [
+    "localhost",
+    "127.0.0.1",
+    hostname,
+    "ais-dev-oc4b4hbvcplakxj75vjnyr-613459494878.asia-east1.run.app",
+    "ais-pre-oc4b4hbvcplakxj75vjnyr-613459494878.asia-east1.run.app",
+    "*.vercel.app",
+    `${projectId}.firebaseapp.com`,
+    `${projectId}.web.app`,
+  ];
+
+  const uniqueDomains = Array.from(new Set(requiredDomains.filter(Boolean)));
+  const consoleUrl = `https://console.firebase.google.com/project/${projectId}/authentication/settings`;
+
+  res.json({
+    status: "ok",
+    currentHost: host,
+    currentHostname: hostname,
+    projectId,
+    requiredDomains: uniqueDomains,
+    consoleUrl,
+    instructions: {
+      step1: "Open Firebase Console -> Authentication -> Settings -> Authorized domains",
+      step2: `Click 'Add domain' and add: '${hostname}'`,
+      step3: "For Vercel or custom domain deployment, add '*.vercel.app' or your custom domain",
+      consoleUrl,
+    },
+  });
+});
+
+app.post("/api/firebase/authorized-domains", (req, res) => {
+  const host = req.get("host") || "localhost:3000";
+  const hostname = host.split(":")[0];
+  const { currentDomain, requiredDomains, projectId } = req.body || {};
+  const activeProjectId = projectId || process.env.FIREBASE_PROJECT_ID || "emergent-horizon-ct3g1";
+  const targetDomain = currentDomain || hostname;
+
+  const fullDomainList = Array.from(
+    new Set([
+      "localhost",
+      "127.0.0.1",
+      targetDomain,
+      "ais-dev-oc4b4hbvcplakxj75vjnyr-613459494878.asia-east1.run.app",
+      "ais-pre-oc4b4hbvcplakxj75vjnyr-613459494878.asia-east1.run.app",
+      "*.vercel.app",
+      `${activeProjectId}.firebaseapp.com`,
+      `${activeProjectId}.web.app`,
+      ...(Array.isArray(requiredDomains) ? requiredDomains : []),
+    ].filter(Boolean))
+  );
+
+  const consoleUrl = `https://console.firebase.google.com/project/${activeProjectId}/authentication/settings`;
+
+  // Firebase Identity Platform restricts direct domain mutation to GCP project owners in console
+  res.json({
+    success: true,
+    autoAuthorized: false,
+    requiresConsoleEntry: true,
+    currentDomain: targetDomain,
+    projectId: activeProjectId,
+    requiredDomains: fullDomainList,
+    consoleUrl,
+    instructions: {
+      message: `Due to Firebase security controls, ${targetDomain} must be added in the Firebase Console settings.`,
+      consoleUrl,
+      exactDomainToAdd: targetDomain,
+      steps: [
+        `1. Open ${consoleUrl}`,
+        `2. Scroll to 'Authorized domains' and click 'Add domain'`,
+        `3. Enter '${targetDomain}' and click 'Save'`,
+      ],
+    },
+  });
+});
+
 // AI Fitness Coach Chat
 app.post("/api/ai/coach", async (req, res) => {
   const { userContext, history } = req.body;

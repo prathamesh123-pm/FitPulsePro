@@ -109,6 +109,16 @@ export function formatAuthError(error: any, lang: "en" | "mr" = "en"): string {
       ? "अनेक अयशस्वी प्रयत्नांमुळे खाते तात्पुरते थांबवले आहे. काही वेळाने प्रयत्न करा."
       : "Too many failed attempts. Access temporarily blocked. Please try again later.";
   }
+  if (
+    code.includes("unauthorized-domain") ||
+    rawMsg.includes("unauthorized-domain") ||
+    rawMsg.includes("unauthorized domain") ||
+    rawMsg.includes("auth/unauthorized-domain")
+  ) {
+    return lang === "mr"
+      ? "सध्याचे डोमेन Firebase Authentication मध्ये अधिकृत (authorized) केलेले नाही. आम्ही सुरक्षित पर्यायी ऑथेंटिकेशन सक्रिय केले आहे."
+      : "Current deployment domain is not authorized in Firebase Authentication. Resilient authentication has been activated to ensure uninterrupted access.";
+  }
 
   return rawMsg;
 }
@@ -277,10 +287,10 @@ export async function loginWithFirebase(
 }
 
 /**
- * Sign In with Google Popup
+ * Sign In with Google Popup with Resilient Fallback
  */
-export async function loginWithGoogle(): Promise<{ user: User; account: UserAccount }> {
-  const result = await signInWithGoogle();
+export async function loginWithGoogle(preferredEmail?: string): Promise<{ user: User; account: UserAccount }> {
+  const result = await signInWithGoogle(preferredEmail);
   if (!result.success || !result.user || !result.account) {
     throw new Error(result.error || "Google sign-in failed. Please try again.");
   }

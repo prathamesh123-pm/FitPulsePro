@@ -16,14 +16,19 @@ import {
   HardDrive,
   Save,
   Check,
+  Sparkles,
+  ExternalLink,
 } from "lucide-react";
 import { AppSettings, AppState } from "../types";
 import {
   saveSettingsToCloud,
   syncOfflineCacheToCloud,
   auth,
+  resolvedFirebaseConfig,
 } from "../services/firebase";
 import { ConfirmationDialog } from "./ConfirmationDialog";
+import { AuthorizedDomainsModal } from "./AuthorizedDomainsModal";
+import { FirebaseMigrationModal } from "./FirebaseMigrationModal";
 
 interface SettingsModuleViewProps {
   state: AppState;
@@ -57,6 +62,8 @@ export const SettingsModuleView: React.FC<SettingsModuleViewProps> = ({
   const [isRestoring, setIsRestoring] = useState(false);
   const [restoreConfirmOpen, setRestoreConfirmOpen] = useState(false);
   const [restoreDataPayload, setRestoreDataPayload] = useState<any>(null);
+  const [isDomainsModalOpen, setIsDomainsModalOpen] = useState(false);
+  const [isMigrationModalOpen, setIsMigrationModalOpen] = useState(false);
 
   const handleToggleTheme = (theme: "dark" | "light") => {
     const updated: AppSettings = {
@@ -434,6 +441,71 @@ export const SettingsModuleView: React.FC<SettingsModuleViewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* 5. Firebase Cloud & Authorized Domains Infrastructure */}
+      <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Shield className="w-4 h-4 text-emerald-400" />
+            <h3 className="text-sm font-bold text-white">Firebase &amp; Authorized Domains</h3>
+          </div>
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+            Zero-Error Resilient Mode
+          </span>
+        </div>
+
+        <p className="text-xs text-slate-400">
+          Manage your cloud deployment domains, Google Sign-In authorization, and Firebase project linkage:
+        </p>
+
+        <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+            <span className="text-slate-400 font-medium">Active Project ID:</span>
+            <span className="font-mono font-bold text-emerald-400">{resolvedFirebaseConfig.projectId}</span>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+            <span className="text-slate-400 font-medium">Auth Domain:</span>
+            <span className="font-mono text-slate-300">{resolvedFirebaseConfig.authDomain}</span>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+            <span className="text-slate-400 font-medium">Current Host:</span>
+            <span className="font-mono text-teal-300">
+              {typeof window !== "undefined" ? window.location.hostname : "Active Host"}
+            </span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+          <button
+            onClick={() => setIsDomainsModalOpen(true)}
+            className="py-2.5 px-3 rounded-xl bg-teal-500/15 hover:bg-teal-500/25 border border-teal-500/30 text-teal-300 font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer"
+          >
+            <Globe className="w-4 h-4 text-teal-400" />
+            <span>Authorized Domains Manager</span>
+          </button>
+
+          <button
+            onClick={() => setIsMigrationModalOpen(true)}
+            className="py-2.5 px-3 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer"
+          >
+            <Sparkles className="w-4 h-4 text-emerald-400" />
+            <span>Migrate to Personal Firebase</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Authorized Domains Modal */}
+      <AuthorizedDomainsModal
+        isOpen={isDomainsModalOpen}
+        onClose={() => setIsDomainsModalOpen(false)}
+        lang={settings.language === "mr" ? "mr" : "en"}
+      />
+
+      {/* Migration Modal */}
+      <FirebaseMigrationModal
+        isOpen={isMigrationModalOpen}
+        onClose={() => setIsMigrationModalOpen(false)}
+      />
 
       {/* Confirmation Dialog before Restore */}
       <ConfirmationDialog
