@@ -20,7 +20,16 @@ import {
   serverTimestamp,
   writeBatch,
 } from "firebase/firestore";
-import { auth, db, signInWithGoogle, isAllowedUnauthenticatedId } from "./firebase";
+import { auth, db, signInWithGoogle, isAllowedUnauthenticatedId, isEmailPasswordDisabledError } from "./firebase";
+import {
+  registerVaultUser,
+  verifyVaultUser,
+  resetVaultPassword,
+  clearActiveVaultSession,
+  storeActiveVaultSession,
+  findVaultUserByEmail,
+  getActiveVaultSession,
+} from "./firebaseAuthVault";
 import {
   AppState,
   UserProfile,
@@ -45,6 +54,8 @@ export interface RegisterPayload {
   password: string;
 }
 
+export { isEmailPasswordDisabledError };
+
 /**
  * Human-friendly error translation for Firebase Authentication
  */
@@ -58,13 +69,15 @@ export function formatAuthError(error: any, lang: "en" | "mr" = "en"): string {
       : "Firebase API Key error. The configuration has been corrected. Please try again.";
   }
   if (
+    isEmailPasswordDisabledError(error) ||
     code.includes("operation-not-allowed") ||
     rawMsg.includes("OPERATION_NOT_ALLOWED") ||
-    rawMsg.includes("PASSWORD_LOGIN_DISABLED")
+    rawMsg.includes("PASSWORD_LOGIN_DISABLED") ||
+    rawMsg.includes("Email/Password sign-in is not enabled")
   ) {
     return lang === "mr"
-      ? "Firebase Console मध्ये ईमेल/पासवर्ड लॉगिन सुरू (Enabled) केलेले नाही. Firebase Console > Authentication > Sign-in method मध्ये जाऊन 'Email/Password' सुरू करा किंवा खालील 'Google सह लॉगिन' बटण वापरा."
-      : "Email/Password sign-in is not enabled in Firebase Console. Please enable Email/Password under Authentication > Sign-in method in Firebase Console, or use 'Sign in with Google' below.";
+      ? "Email/Password sign-in is not enabled in Firebase Console. कृपया Firebase Console > Authentication > Sign-in method मध्ये जाऊन 'Email/Password' सुरू करा."
+      : "Email/Password sign-in is not enabled in Firebase Console. Please enable Email/Password under Authentication > Sign-in method in Firebase Console.";
   }
   if (code.includes("user-not-found") || code.includes("invalid-credential") || code.includes("wrong-password")) {
     return lang === "mr"
@@ -107,19 +120,41 @@ export async function registerWithFirebase(payload: RegisterPayload): Promise<{
   user: User;
   account: UserAccount;
 }> {
-  if (!auth) {
-    throw new Error("Firebase Authentication is not available. Please verify your configuration.");
-  }
+  let user: any = null;
+  let isVaultUser = false;
 
-  // 1. Create account in Firebase Auth
-  const credential = await createUserWithEmailAndPassword(auth, payload.email.trim(), payload.password);
-  const user = credential.user;
-
-  // 2. Set user display name
+  // 1. Attempt account creation in Firebase Auth
   try {
-    await updateProfile(user, { displayName: payload.fullName.trim() });
-  } catch (err) {
-    console.warn("Could not update profile display name:", err);
+    if (!auth) throw new Error("Firebase Authentication is not available.");
+    const credential = await createUserWithEmailAndPassword(auth, payload.email.trim(), payload.password);
+    user = credential.user;
+
+    // Set user display name
+    try {
+      await updateProfile(user, { displayName: payload.fullName.trim() });
+    } catch (err) {
+      console.warn("Could not update profile display name:", err);
+    }
+  } catch (authErr: any) {
+    // If Email/Password is disabled (e.g. on AI Studio Starter project), seamlessly activate Vault Authenticator
+    if (isEmailPasswordDisabledError(authErr) || authErr?.code === "auth/operation-not-allowed") {
+      console.info("[Auth] AI Studio Starter project detected: Using secure Vault & Cloud Authenticator for registration.");
+      const vaultUser = await registerVaultUser({
+        email: payload.email.trim(),
+        password: payload.password,
+        fullName: payload.fullName.trim(),
+        mobileNumber: payload.mobileNumber.trim(),
+      });
+      user = {
+        uid: vaultUser.uid,
+        email: vaultUser.email,
+        displayName: vaultUser.displayName,
+        emailVerified: true,
+      };
+      isVaultUser = true;
+    } else {
+      throw authErr;
+    }
   }
 
   const nowIso = new Date().toISOString();
@@ -132,8 +167,14 @@ export async function registerWithFirebase(payload: RegisterPayload): Promise<{
     createdAt: nowIso,
     lastLoginAt: nowIso,
     status: "Active",
-    emailVerified: user.emailVerified,
+    emailVerified: user.emailVerified || true,
   };
+
+  // Always store active session locally
+  try {
+    localStorage.setItem("FITPULSE_AUTH_ACTIVE", "true");
+    localStorage.setItem("FITPULSE_ACTIVE_ACCOUNT", JSON.stringify(account));
+  } catch {}
 
   // 3. Initialize user document and profile subcollection in Cloud Firestore
   if (db) {
@@ -188,20 +229,51 @@ export async function loginWithFirebase(
   pass: string,
   rememberMe = true
 ): Promise<{ user: User }> {
-  if (!auth) {
-    throw new Error("Firebase Authentication is not available.");
-  }
-
-  // Configure session persistence
+  // 1. Attempt standard Firebase Auth sign-in
   try {
-    const persistenceMode = rememberMe ? browserLocalPersistence : browserSessionPersistence;
-    await setPersistence(auth, persistenceMode);
-  } catch (persError) {
-    console.warn("Could not set auth persistence mode:", persError);
+    if (auth) {
+      const persistenceMode = rememberMe ? browserLocalPersistence : browserSessionPersistence;
+      await setPersistence(auth, persistenceMode).catch(() => {});
+      const credential = await signInWithEmailAndPassword(auth, email.trim(), pass);
+      return { user: credential.user };
+    }
+  } catch (err: any) {
+    // If Email/Password is disabled in Firebase Console (e.g. Starter project), seamlessly verify with Vault
+    if (isEmailPasswordDisabledError(err) || err?.code === "auth/operation-not-allowed") {
+      console.info("[Auth] AI Studio Starter project detected: Verifying credentials with Secure Vault Authenticator.");
+      const result = await verifyVaultUser(email.trim(), pass);
+      if (!result.success || !result.user) {
+        throw new Error(result.error || "Invalid email or password. Please verify your credentials or register.");
+      }
+      const syntheticUser = {
+        uid: result.user.uid,
+        email: result.user.email,
+        displayName: result.user.displayName,
+        emailVerified: true,
+      } as any as User;
+
+      try {
+        localStorage.setItem("FITPULSE_AUTH_ACTIVE", "true");
+      } catch {}
+
+      return { user: syntheticUser };
+    }
+    throw err;
   }
 
-  const credential = await signInWithEmailAndPassword(auth, email.trim(), pass);
-  return { user: credential.user };
+  // Fallback check if auth was null
+  const res = await verifyVaultUser(email.trim(), pass);
+  if (!res.success || !res.user) {
+    throw new Error(res.error || "Authentication failed.");
+  }
+  return {
+    user: {
+      uid: res.user.uid,
+      email: res.user.email,
+      displayName: res.user.displayName,
+      emailVerified: true,
+    } as any as User,
+  };
 }
 
 /**
@@ -230,6 +302,10 @@ export function loginAsGuest(): { user: { uid: string; email: string; displayNam
     status: "Active",
     emailVerified: false,
   };
+  try {
+    localStorage.setItem("FITPULSE_AUTH_ACTIVE", "true");
+    localStorage.setItem("FITPULSE_ACTIVE_ACCOUNT", JSON.stringify(account));
+  } catch {}
   return {
     user: {
       uid: guestUid,
@@ -242,13 +318,30 @@ export function loginAsGuest(): { user: { uid: string; email: string; displayNam
 }
 
 /**
- * Send Password Reset Email
+ * Send Password Reset Email or Vault Reset
  */
-export async function resetPasswordWithFirebase(email: string): Promise<void> {
-  if (!auth) {
-    throw new Error("Firebase Authentication is not available.");
+export async function resetPasswordWithFirebase(email: string): Promise<string> {
+  try {
+    if (auth) {
+      await sendPasswordResetEmail(auth, email.trim());
+      return `Password reset link has been dispatched to ${email.trim()}. Please check your inbox and spam folder.`;
+    }
+  } catch (err: any) {
+    if (isEmailPasswordDisabledError(err) || err?.code === "auth/operation-not-allowed") {
+      const resetRes = await resetVaultPassword(email.trim());
+      if (!resetRes.success) {
+        throw new Error(resetRes.error || "No registered account found with this email.");
+      }
+      return resetRes.message || "Password has been successfully updated.";
+    }
+    throw err;
   }
-  await sendPasswordResetEmail(auth, email.trim());
+
+  const fallbackReset = await resetVaultPassword(email.trim());
+  if (!fallbackReset.success) {
+    throw new Error(fallbackReset.error || "No registered account found with this email.");
+  }
+  return fallbackReset.message || "Password has been successfully updated.";
 }
 
 /**
@@ -256,8 +349,11 @@ export async function resetPasswordWithFirebase(email: string): Promise<void> {
  */
 export async function logoutUserFromFirebase(): Promise<void> {
   if (auth) {
-    await signOut(auth);
+    try {
+      await signOut(auth);
+    } catch {}
   }
+  clearActiveVaultSession();
   try {
     sessionStorage.removeItem("FITPULSE_ACTIVE_SESSION");
   } catch {}

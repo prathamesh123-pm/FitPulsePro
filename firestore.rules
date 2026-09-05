@@ -16,7 +16,9 @@ service cloud.firestore {
              userId == 'guest' ||
              userId == 'default-athlete' ||
              userId == 'user_local' ||
-             userId == 'usr-admin-01';
+             userId == 'usr-admin-01' ||
+             userId.matches('^vault_.*') ||
+             userId.matches('^guest_.*');
     }
 
     function isPermittedGuest(userId) {

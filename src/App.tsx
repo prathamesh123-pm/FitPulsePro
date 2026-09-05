@@ -22,6 +22,7 @@ import {
 import {
   loadAppState,
   saveAppState,
+  createInitialUserState,
 } from "./services/storageService";
 import { calculateHealthMetrics } from "./utils/healthCalculators";
 import {
@@ -35,7 +36,6 @@ import {
   subscribeToAnnouncements,
   saveAllDataToFirebaseConsole,
 } from "./services/firebase";
-import { doc, getDocFromServer } from "firebase/firestore";
 
 import { LockScreen } from "./components/LockScreen";
 import { Navbar } from "./components/Navbar";
@@ -51,6 +51,8 @@ import { SplashScreen } from "./components/SplashScreen";
 import { AuthScreen } from "./components/AuthScreen";
 import { UserProfileManager } from "./components/UserProfileManager";
 import { CloudSyncDashboard } from "./components/CloudSyncDashboard";
+import { NavigationDrawer } from "./components/NavigationDrawer";
+import { HelpModal } from "./components/HelpModal";
 import {
   logoutUserFromFirebase,
   autoSaveUserDataToCloud,
@@ -205,19 +207,21 @@ export default function App() {
   const [isAudioCoachOpen, setIsAudioCoachOpen] = useState(false);
   const [isDietPlannerOpen, setIsDietPlannerOpen] = useState(false);
 
-  // Splash & Authentication States (Requirements 1, 2, 3, 4)
+  // Splash & Authentication States (Requirements 1, 2, 3, 4, 7, 10, 11)
   const [showSplash, setShowSplash] = useState(true);
-  const [authResolved, setAuthResolved] = useState<boolean | null>(null);
+  const [authResolved, setAuthResolved] = useState<boolean>(false);
   const [firebaseUser, setFirebaseUser] = useState<any>(() => auth?.currentUser || null);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     try {
-      return Boolean(localStorage.getItem("FITPULSE_AUTH_ACTIVE") === "true");
+      return Boolean(auth?.currentUser && localStorage.getItem("FITPULSE_AUTH_ACTIVE") === "true");
     } catch {
       return false;
     }
   });
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
 
-  // Logout handler (Requirement 13)
+  // Logout handler (Requirements 5, 6, 8)
   const handleLogout = async () => {
     try {
       await logoutUserFromFirebase();
@@ -226,14 +230,34 @@ export default function App() {
     }
     try {
       localStorage.removeItem("FITPULSE_AUTH_ACTIVE");
+      sessionStorage.removeItem("FITPULSE_ACTIVE_SESSION");
     } catch {}
+    setFirebaseUser(null);
     setIsAuthenticated(false);
-    setAppState((prev) => ({
-      ...prev,
-      currentUserAccount: undefined,
-      cloudUser: null,
-    }));
+    setIsUserProfileManagerOpen(false);
+    setIsDrawerOpen(false);
+    // Reset memory state so no data leaks across accounts (Requirement 13)
+    setAppState(createInitialUserState());
     handleNotify("Signed Out", "You have been logged out securely.", "info", "Auth");
+  };
+
+  // Switch Account handler (Requirement 9)
+  const handleSwitchAccount = async () => {
+    try {
+      await logoutUserFromFirebase();
+    } catch (e) {
+      console.warn("Switch account notice:", e);
+    }
+    try {
+      localStorage.removeItem("FITPULSE_AUTH_ACTIVE");
+      sessionStorage.removeItem("FITPULSE_ACTIVE_SESSION");
+    } catch {}
+    setFirebaseUser(null);
+    setIsAuthenticated(false);
+    setIsUserProfileManagerOpen(false);
+    setIsDrawerOpen(false);
+    setAppState(createInitialUserState());
+    handleNotify("Switch Account", "Ready to sign in with another account.", "info", "Auth");
   };
 
   // Requirement 7 & 14: Debounced Auto-save to local storage AND Firebase Cloud Firestore under users/{UID}/...
@@ -303,11 +327,12 @@ export default function App() {
 
         // WhatsApp / Google Drive style multi-device cloud restoration (Requirement 9 & 14)
         const restoredCloudData = await downloadAllUserDataFromCloud(user.uid);
+        const baseUserState = loadAppState(user.uid);
 
         setAppState((prev) => ({
-          ...prev,
+          ...baseUserState,
           ...(restoredCloudData || {}),
-          currentUserAccount: account || prev.currentUserAccount,
+          currentUserAccount: account || baseUserState.currentUserAccount,
           cloudUser: {
             uid: user.uid,
             email: user.email || "",
@@ -316,13 +341,13 @@ export default function App() {
             isAnonymous: user.isAnonymous,
           },
           profile: {
-            ...prev.profile,
+            ...baseUserState.profile,
             ...(restoredCloudData?.profile || {}),
-            fullName: user.displayName || prev.profile.fullName,
-            email: user.email || prev.profile.email,
+            fullName: user.displayName || baseUserState.profile.fullName,
+            email: user.email || baseUserState.profile.email,
           },
           sync: {
-            ...prev.sync,
+            ...baseUserState.sync,
             isOnline: navigator.onLine,
             syncStatus: "synced",
             lastSyncDate: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
@@ -331,14 +356,12 @@ export default function App() {
         }));
       } else {
         setAuthResolved(true);
-        const remembered = localStorage.getItem("FITPULSE_AUTH_ACTIVE");
-        if (!remembered) {
-          setIsAuthenticated(false);
-        }
-        setAppState((prev) => ({
-          ...prev,
-          cloudUser: null,
-        }));
+        setIsAuthenticated(false);
+        setFirebaseUser(null);
+        try {
+          localStorage.removeItem("FITPULSE_AUTH_ACTIVE");
+        } catch {}
+        setAppState(createInitialUserState());
       }
     });
 
@@ -359,14 +382,6 @@ export default function App() {
     if (db && navigator.onLine) {
       initialSyncTimer = setTimeout(async () => {
         if (!isMounted) return;
-        try {
-          await getDocFromServer(doc(db, "test", "connection"));
-        } catch (error: any) {
-          if (error instanceof Error && error.message.includes("the client is offline")) {
-            console.info("Firestore operating in offline mode.");
-          }
-        }
-
         // Ensure all local state data is synced to Firebase Console for active authenticated users
         try {
           const uid = auth?.currentUser?.uid;
@@ -832,11 +847,11 @@ export default function App() {
     });
   };
 
-  // Requirement 1: Splash Screen
+  // Requirement 1 & 7: Splash Screen
   if (showSplash) {
     return (
       <SplashScreen
-        isLoggedIn={authResolved}
+        isLoggedIn={authResolved ? Boolean(firebaseUser && isAuthenticated) : null}
         onFinish={(loggedIn) => {
           setShowSplash(false);
           setIsAuthenticated(loggedIn);
@@ -845,7 +860,7 @@ export default function App() {
     );
   }
 
-  // Requirement 2: Login & Registration Screen
+  // Requirement 2 & 8: Login & Registration Screen (Always accessible after logout)
   if (!isAuthenticated) {
     return (
       <AuthScreen
@@ -855,9 +870,11 @@ export default function App() {
             localStorage.setItem("FITPULSE_AUTH_ACTIVE", "true");
           } catch {}
           setIsAuthenticated(true);
+          setFirebaseUser(auth?.currentUser || { uid: account.uid, email: account.email });
+          const baseState = loadAppState(account.uid);
           setAppState((prev) => {
             const next = {
-              ...prev,
+              ...baseState,
               ...(restoredCloudState || {}),
               currentUserAccount: account,
               cloudUser: {
@@ -868,14 +885,15 @@ export default function App() {
                 isAnonymous: false,
               },
               profile: {
-                ...prev.profile,
+                ...baseState.profile,
                 ...(restoredCloudState?.profile || {}),
-                fullName: account.displayName || prev.profile.fullName,
-                email: account.email || prev.profile.email,
-                mobileNumber: account.mobileNumber || prev.profile.mobileNumber,
+                fullName: account.displayName || baseState.profile.fullName,
+                email: account.email || baseState.profile.email,
+                mobileNumber: account.mobileNumber || baseState.profile.mobileNumber,
+                photoUrl: account.photoURL || baseState.profile.photoUrl,
               },
               sync: {
-                ...prev.sync,
+                ...baseState.sync,
                 isOnline: navigator.onLine,
                 syncStatus: "synced" as const,
                 lastSyncDate: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
@@ -909,6 +927,7 @@ export default function App() {
         notificationsEnabled={notificationsEnabled}
         onToggleNotificationsEnabled={handleToggleNotificationsEnabled}
         onToggleDarkMode={handleToggleDarkMode}
+        onOpenDrawer={() => setIsDrawerOpen(true)}
         onOpenProfile={() => setIsUserProfileManagerOpen(true)}
         onLogout={handleLogout}
         onLockApp={() => setIsLocked(true)}
@@ -1288,10 +1307,33 @@ export default function App() {
             onUpdateProfile={handleUpdateProfile}
             onClose={() => setIsUserProfileManagerOpen(false)}
             onLogout={handleLogout}
+            onSwitchAccount={handleSwitchAccount}
             onNotify={handleNotify}
             lang={lang}
           />
         )}
+
+        {/* Requirement 10: Navigation Drawer */}
+        <NavigationDrawer
+          isOpen={isDrawerOpen}
+          onClose={() => setIsDrawerOpen(false)}
+          state={appState}
+          currentTab={activeTab}
+          onSelectTab={(tab) => setActiveTab(tab)}
+          onOpenProfile={() => setIsUserProfileManagerOpen(true)}
+          onOpenSettings={() => setActiveTab("settings")}
+          onOpenHelp={() => setIsHelpModalOpen(true)}
+          onSwitchAccount={handleSwitchAccount}
+          onLogout={handleLogout}
+          lang={lang}
+        />
+
+        {/* Help & Support Modal */}
+        <HelpModal
+          isOpen={isHelpModalOpen}
+          onClose={() => setIsHelpModalOpen(false)}
+          lang={lang}
+        />
       </Suspense>
     </div>
   );
